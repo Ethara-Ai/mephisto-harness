@@ -27,6 +27,8 @@
   <a href="https://edge-bench.org/paper.pdf"><img src="https://img.shields.io/badge/Tech%20Report-PDF-red?logo=adobeacrobatreader" alt="Tech Report"></a>
   <a href="https://huggingface.co/datasets/ByteDance-Seed/EdgeBench"><img src="https://img.shields.io/badge/%F0%9F%A4%97%20HuggingFace-Dataset-yellow" alt="Dataset"></a>
   <a href="https://bytedance-seed.github.io/EdgeBench/"><img src="https://img.shields.io/badge/Docs-SForge%20Harness-purple" alt="Docs"></a>
+  <a href="assets/wechat_qr.jpg"><img src="https://img.shields.io/badge/WeChat-Group-07C160?logo=wechat&logoColor=white" alt="WeChat Group"></a>
+  <a href="https://discord.gg/p2JZ26ku8"><img src="https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white" alt="Discord"></a>
 </p>
 
 ---
