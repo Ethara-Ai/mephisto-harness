@@ -1,0 +1,138 @@
+# Run ALL EdgeBench tasks on a Kubernetes cluster with DeepSeek V4 Pro.
+# DeepSeek V4 Pro supports 1M context — append [1m] to the model name.
+# For details on third-party model settings, see ../single-task-docker/README.md.
+
+# ── Environment variables ─────────────────────────────────────────────
+# Injected into the host process before the run starts.
+env:
+  # REQUIRED for k8s backend — pods pull images from this registry.
+  SFORGE_K8S_IMAGE_REGISTRY: "<registry-ip>:5000"
+
+  # Mirrors (optional) — speed up npm/node installs inside work containers.
+  # Only needed in environments with slow/blocked access to upstream registries.
+  # SFORGE_NODEJS_MIRROR_URL: "https://mirrors.aliyun.com/nodejs-release"
+  # SFORGE_NPM_REGISTRY_URL: "https://registry.npmmirror.com"
+
+  # Strip dynamic system-prompt sections so the prompt prefix stays
+  # stable and cacheable on the third-party API.
+  SFORGE_CLAUDE_CACHE_OPT: 1
+
+# ── Stagger ───────────────────────────────────────────────────────────
+# Delay (seconds) between launching consecutive tasks.
+# With 50+ tasks starting at once, this prevents API rate-limit storms
+# and K8s scheduling pressure. Set to 0 to launch all simultaneously.
+stagger: 600
+
+# ── Model ─────────────────────────────────────────────────────────────
+model:
+  api_key: "your-deepseek-key"
+  api_base_url: "https://api.deepseek.com/anthropic"
+  model: deepseek-v4-pro[1m]
+
+# ── Defaults applied to every task ────────────────────────────────────
+defaults:
+  backend: k8s
+  agent: claude-code
+  timeout: 43200                          # 12 hours per task
+  eval_interval: 1800                     # auto-eval every 30 min
+  submission_cooldown: 120                # min seconds between agent submissions
+  work_cpu_limit: 4
+  work_mem_limit: "16g"
+  judge_cpu_limit: 4
+  judge_mem_limit: "8g"
+
+  # Override Claude Code's internal model routing so all calls
+  # (opus/sonnet/haiku tiers, subagent spawning) go to DeepSeek.
+  extra_env:
+    ANTHROPIC_MODEL: "deepseek-v4-pro[1m]"
+    ANTHROPIC_DEFAULT_OPUS_MODEL: "deepseek-v4-pro[1m]"
+    ANTHROPIC_DEFAULT_SONNET_MODEL: "deepseek-v4-pro[1m]"
+    ANTHROPIC_DEFAULT_HAIKU_MODEL: "deepseek-v4-pro[1m]"
+    CLAUDE_CODE_SUBAGENT_MODEL: "deepseek-v4-pro[1m]"
+
+# ── YAML anchors for common overrides ─────────────────────────────────
+# Lean/Coq theorem-proving tasks need more CPU and memory for the prover.
+x-lean-task: &lean_task
+  work_cpu_limit: 8
+  work_mem_limit: "16g"
+  judge_cpu_limit: 8
+  judge_mem_limit: "16g"
+
+# ── Tasks ─────────────────────────────────────────────────────────────
+# Each key is a task_id (matching a JSON in tasks/).
+# {} inherits all defaults; add per-task overrides as needed.
+tasks:
+  # ─── Science ────────────────────────────────────────────────────────
+  bipedalwalker_locomotion_rl: {}
+  capecod_plume_reconstruction: {}
+  dabic_gravity_inversion:
+    submission_cooldown: 2160             # long eval — throttle submissions
+  graph_node_classification:
+    judge_mem_limit: "16g"
+
+  # ─── Code / Systems ────────────────────────────────────────────────
+  ann_vector_search_qps: {}
+  arc_compiler_runtime: {}
+  exchange_core_throughput: {}
+  ffmpeg_swscale_reimplementation: {}
+  git_rewrite_in_zig: {}
+  integer_compression_codec: {}
+  juliet_vulnerability_analyzer: {}
+  rust_multicrate_reconstruction: {}
+  schemathesis_config_modernization:
+    submission_cooldown: 216
+  schemathesis_datagen_pipeline:
+    submission_cooldown: 216
+  schemathesis_reporting_observability:
+    submission_cooldown: 216
+  vliw_kernel_optimization: {}
+
+  # ─── Combinatorial Optimization ─────────────────────────────────────
+  ad_placement_optimization: {}
+  apple_incremental_game: {}
+  equivalence_class_divide_and_conquer: {}
+  grid_turing_robot: {}
+  jagua_nesting_optimization: {}
+  molecular_self_assembly: {}
+  order_addition_permutation_optimization: {}
+  smt_solver:
+    work_cpu_limit: 16
+    work_mem_limit: "16g"
+    judge_cpu_limit: 16
+    judge_mem_limit: "16g"
+  treant_forest: {}
+  tree_block_partitioning: {}
+  triangulation_coloring_optimization: {}
+  vehicle_routing_time_windows: {}
+  vibrating_path_graph_coloring: {}
+  warehouse_forklift_routing: {}
+  wireless_electricity_layout: {}
+
+  # ─── Knowledge / Domain (LLM-graded tasks need SFORGE_JUDGE_EXTRA_ENV) ──
+  college_english_exam_bank: {}
+  cta_risk_budget_optimization: {}
+  k12_math_recommendation: {}
+  portfolio_risk_calibration: {}
+
+  # ─── Formal Math (Lean/Coq) ────────────────────────────────────────
+  carleson_formalization: *lean_task
+  combinatorial_games_formalization: *lean_task
+  flt_regular_formalization: *lean_task
+  lean_analysis_proofs: *lean_task
+  new_foundations_consistency: *lean_task
+  ordinal_notation_well_foundedness: {}
+  pfr_formalization: *lean_task
+  sphere_eversion_formalization: *lean_task
+
+  # ─── Interactive Games ──────────────────────────────────────────────
+  anchorhead_text_adventure:
+    submission_cooldown: 0                # game-mode: no cooldown needed
+  dcss_dungeon_ai: {}
+  nethack_dungeon_agent: {}
+  openrct2_theme_park_ai: {}
+  openttd_transport_ai: {}
+  trinity_text_adventure:
+    submission_cooldown: 0
+  tryst_text_adventure:
+    submission_cooldown: 0
+  wesnoth_tactical_ai: {}

@@ -1,0 +1,48 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "sforge"
+version = "1.0.0"
+description = "SForge: Evaluation harness for frontier agents"
+readme = "README.md"
+requires-python = ">=3.10,<3.14"
+license = { text = "Apache-2.0" }
+authors = [{ name = "ByteDance Seed" }]
+keywords = ["evaluation", "benchmark", "code-agent", "llm"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Science/Research",
+    "Topic :: Software Development :: Testing",
+    "Programming Language :: Python :: 3",
+]
+dependencies = [
+    "docker>=7.0",
+    "tqdm",
+    "rich",
+    "fastapi",
+    "python-multipart",
+    "uvicorn[standard]",
+    "jinja2",
+    "requests",
+    "pyyaml>=6.0",
+    "typing_extensions>=4.0",
+    "huggingface-hub>=0.20",
+]
+
+[project.scripts]
+sforge = "sforge.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/ByteDance-Seed/EdgeBench"
+Repository = "https://github.com/ByteDance-Seed/EdgeBench"
+
+[dependency-groups]
+dev = ["pytest", "httpx"]
+
+[tool.hatch.build.targets.sdist]
+only-include = ["sforge"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["sforge"]
