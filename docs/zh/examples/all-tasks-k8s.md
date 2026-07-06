@@ -6,6 +6,14 @@ title: "全部任务 (Kubernetes)"
 
 使用 Kubernetes 集群运行完整的 EdgeBench 任务套件（约 50 个任务）。
 
+::: tip 官方 leaderboard 配置
+本示例中的 experiment YAML 就是 **EdgeBench leaderboard 的官方配置**（单任务 12 小时预算、启用 stop hook 与 auto-eval、按文件中的资源限额）。若希望结果与 leaderboard 可比，请只修改 `env`、`model` 和镜像仓库地址，其余保持不变。
+:::
+
+::: warning 费用
+使用前沿模型（如 Claude Opus）时，单个任务跑满 12 小时预算的 API 费用可达**数百甚至上千美元**，完整跑一遍约 50 个任务是数万美元量级的开销。请先用单任务 + 较短 `--timeout` 摸清费用水平。
+:::
+
 ## 前提条件
 
 | 要求 | 验证方式 |

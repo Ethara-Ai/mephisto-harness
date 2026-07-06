@@ -2,6 +2,16 @@
 
 Run one EdgeBench task (`ad_placement_optimization`) on your local machine using Docker.
 
+> **Scale:** The Docker backend is meant for trying out a **small number of
+> tasks**. Running many tasks concurrently on one host (roughly 20+)
+> will exhaust even a high-end server. For full-suite runs use the
+> [Kubernetes example](../all-tasks-k8s/) with the official settings.
+
+> **Cost:** frontier-model runs are expensive — one task over the official
+> 12-hour budget can cost hundreds to over a thousand USD in API usage.
+> Start with a short `--timeout` (this example uses 2 hours) to gauge your
+> burn rate before scaling up.
+
 ## Prerequisites
 
 | Requirement | Check |

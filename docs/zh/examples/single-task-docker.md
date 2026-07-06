@@ -6,6 +6,14 @@ title: "单任务运行 (Docker)"
 
 使用 Docker 在本地运行一个 EdgeBench 任务（`ad_placement_optimization`）。
 
+::: tip 规模
+Docker backend 只适合**小批量任务**试跑。在单机上并发运行大量任务（约 20 个以上）即使是高性能服务器也会被耗尽。完整套件请使用 [Kubernetes 示例](/zh/examples/all-tasks-k8s)中的官方配置。
+:::
+
+::: warning 费用
+前沿模型的运行费用很高——单个任务跑满官方 12 小时预算，API 费用可达数百甚至上千美元。建议先用较短的 `--timeout`（本示例为 2 小时）试跑，摸清费用水平后再扩大规模。
+:::
+
 ## 前提条件
 
 | 要求 | 验证方式 |

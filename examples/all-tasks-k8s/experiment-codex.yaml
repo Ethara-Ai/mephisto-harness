@@ -1,3 +1,8 @@
+# OFFICIAL EDGEBENCH LEADERBOARD SETTING (Codex + GPT)
+# The experiment YAMLs in this directory are the official settings
+# behind the leaderboard numbers. For comparable results, change only
+# `env`, `model`, and registry values.
+#
 # Run ALL EdgeBench tasks on a Kubernetes cluster with Codex.
 # See README.md in this directory for full instructions.
 

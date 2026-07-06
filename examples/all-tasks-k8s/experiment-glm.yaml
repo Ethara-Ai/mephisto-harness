@@ -1,3 +1,8 @@
+# OFFICIAL EDGEBENCH LEADERBOARD SETTING (Claude Code + GLM 5.1)
+# The experiment YAMLs in this directory are the official settings
+# behind the leaderboard numbers. For comparable results, change only
+# `env`, `model`, and registry values.
+#
 # Run ALL EdgeBench tasks on a Kubernetes cluster with GLM 5.1.
 # GLM 5.1 has a 200K context window — set compaction variables to prevent overflow.
 # For details on third-party model settings, see ../single-task-docker/README.md.

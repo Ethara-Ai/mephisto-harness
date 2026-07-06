@@ -8,6 +8,10 @@ title: 实验配置
 
 实验配置文件采用 YAML 格式，用于在多任务运行中共享模型设置并支持逐任务覆盖。这将「如何运行」（模型、超时、Agent 设置）与「测试什么」（任务 JSON 定义）解耦。
 
+::: tip 官方 leaderboard 配置
+[all-tasks-k8s 示例](/zh/examples/all-tasks-k8s)中的 experiment YAML 就是 EdgeBench leaderboard 官方数字所使用的配置。
+:::
+
 ## YAML 格式
 
 ```yaml

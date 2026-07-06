@@ -2,6 +2,14 @@
 
 This guide runs one SForge task end to end using the default **Docker backend**: install SForge, fetch task definitions, pull pre-built task images, start the judge server, run an agent, and inspect the result.
 
+::: tip Scale
+The Docker backend is meant for a small number of tasks. Running many tasks concurrently on one host (roughly 20+) will exhaust even a high-end server — use the [Kubernetes backend](/en/configuration/container-backends) for full-suite runs, with the [official leaderboard settings](/en/examples/all-tasks-k8s).
+:::
+
+::: warning Cost
+Frontier-model runs are expensive: one task over the official 12-hour budget can cost **hundreds to over a thousand USD** in API usage. Start with a single task and a short `--timeout` (as in this guide) to gauge your burn rate.
+:::
+
 ## Prerequisites
 
 - **Linux**: SForge currently targets Linux hosts.

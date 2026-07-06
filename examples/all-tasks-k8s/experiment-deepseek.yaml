@@ -1,3 +1,8 @@
+# OFFICIAL EDGEBENCH LEADERBOARD SETTING (Claude Code + DeepSeek V4 Pro)
+# The experiment YAMLs in this directory are the official settings
+# behind the leaderboard numbers. For comparable results, change only
+# `env`, `model`, and registry values.
+#
 # Run ALL EdgeBench tasks on a Kubernetes cluster with DeepSeek V4 Pro.
 # DeepSeek V4 Pro supports 1M context — append [1m] to the model name.
 # For details on third-party model settings, see ../single-task-docker/README.md.

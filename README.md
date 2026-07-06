@@ -192,7 +192,12 @@ SFORGE_AGENT_API_KEY="sk-xxx" \
 
 **Step-by-step examples:**
 - [Single task on local Docker](examples/single-task-docker/) — run one task end-to-end with Docker
-- [All tasks on Kubernetes](examples/all-tasks-k8s/) — run the full suite on a K8s cluster with experiment YAML
+- [All tasks on Kubernetes](examples/all-tasks-k8s/) — run the full suite on a K8s cluster with the **official leaderboard setting**
+
+> [!IMPORTANT]
+> - **Official setting** — leaderboard numbers use the [official experiment YAMLs](examples/all-tasks-k8s/) unchanged, including the time budget, stop hook, auto-eval, submission cooldowns, and hardware resource limits.
+> - **Cost** — one 12-hour task with a frontier model can cost hundreds to over a thousand USD; a full ~50-task run is a five-figure spend.
+> - **Scale** — the Docker backend suits only a few tasks at a time; for full-suite runs use the [Kubernetes backend](https://bytedance-seed.github.io/EdgeBench/en/configuration/container-backends).
 
 **Evaluating your own model / agent:**
 - **Your own model** — the built-in Claude Code and Codex scaffolds work with any compatible API endpoint: point `SFORGE_AGENT_API_BASE_URL` at your endpoint, set your key via `SFORGE_AGENT_API_KEY`, and pass your model name via `--model`. See [Supported Agents](https://bytedance-seed.github.io/EdgeBench/en/guide/agents#using-third-party-models).

@@ -2,6 +2,14 @@
 
 本指南只覆盖一条最短路径：安装 SForge、拉取任务定义、拉取预构建任务镜像、启动 Judge Server、运行 Agent、查看结果。默认使用 **Docker backend**。
 
+::: tip 规模
+Docker backend 只适合小批量任务。在单机上并发运行大量任务（约 20 个以上）即使是高性能服务器也会被耗尽——完整套件请使用 [Kubernetes backend](/zh/configuration/container-backends)，并采用[官方 leaderboard 配置](/zh/examples/all-tasks-k8s)。
+:::
+
+::: warning 费用
+前沿模型的运行费用很高：单个任务跑满官方 12 小时预算，API 费用可达**数百甚至上千美元**。建议先按本指南用单任务 + 较短 `--timeout` 试跑，摸清费用水平后再扩大规模。
+:::
+
 ## 前置依赖
 
 - **Linux**：SForge 目前面向 Linux 宿主机。

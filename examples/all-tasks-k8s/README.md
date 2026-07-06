@@ -2,6 +2,18 @@
 
 Run the full EdgeBench suite (~50 tasks) across a Kubernetes cluster.
 
+> [!IMPORTANT]
+> The experiment YAMLs in this directory are the **official EdgeBench
+> leaderboard settings** (12-hour budget, stop hook + auto-eval enabled,
+> resource limits as given). For results comparable to the leaderboard,
+> change only `env`, `model`, and registry values.
+
+> [!WARNING]
+> **Cost.** With frontier models (e.g. Claude Opus), one task over the full
+> 12-hour budget can cost **hundreds to over a thousand USD** in API usage;
+> a full ~50-task run is a five-figure spend. Gauge your burn rate on one
+> task with a short `--timeout` first.
+
 ## Prerequisites
 
 | Requirement | Check |

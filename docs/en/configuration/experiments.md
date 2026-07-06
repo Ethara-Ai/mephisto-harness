@@ -8,6 +8,10 @@ title: Experiment Configuration
 
 Experiment configuration files provide a YAML-based way to run multiple tasks with shared model settings and per-task overrides. This decouples "how to run" (model, timeouts, agent settings) from "what to test" (task JSON definitions).
 
+::: tip Official leaderboard settings
+The experiment YAMLs in the [all-tasks-k8s example](/en/examples/all-tasks-k8s) are the official configurations behind the EdgeBench leaderboard numbers.
+:::
+
 ## YAML Format
 
 ```yaml

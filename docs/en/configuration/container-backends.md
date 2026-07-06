@@ -15,6 +15,10 @@ SForge uses a container backend to create work containers and judge containers. 
 
 If you are trying a task locally, use the default Docker backend first. The Kubernetes backend is intended for team environments that already have a cluster and container registry.
 
+::: warning Docker backend does not scale to large batches
+Each task runs a work container plus ephemeral judge containers, each with its own CPU/memory limits. Running many tasks concurrently on one host (roughly **20+**) causes severe resource contention even on a high-end server. For large batch runs, use the `k8s` backend.
+:::
+
 ## Configuration
 
 The backend can be configured through CLI flags, environment variables, or experiment YAML:
