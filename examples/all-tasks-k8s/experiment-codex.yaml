@@ -50,7 +50,7 @@ x-lean-task: &lean_task
 tasks:
   # ─── Science ────────────────────────────────────────────────────────
   bipedalwalker_locomotion_rl: {}
-  capecod_plume_reconstruction: {}
+  borden_source_inversion: {}
   dabic_gravity_inversion:
     submission_cooldown: 2160             # long eval — throttle submissions
   graph_node_classification:
