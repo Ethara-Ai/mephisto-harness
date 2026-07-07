@@ -24,7 +24,7 @@
 
 <p align="center">
   <a href="https://edge-bench.org/"><img src="https://img.shields.io/badge/Project-edge--bench.org-blue" alt="Project"></a>
-  <a href="https://edge-bench.org/paper.pdf"><img src="https://img.shields.io/badge/Tech%20Report-PDF-red?logo=adobeacrobatreader" alt="Tech Report"></a>
+  <a href="https://arxiv.org/abs/2607.05155"><img src="https://img.shields.io/badge/Tech%20Report-PDF-red?logo=adobeacrobatreader" alt="Tech Report"></a>
   <a href="https://huggingface.co/datasets/ByteDance-Seed/EdgeBench"><img src="https://img.shields.io/badge/%F0%9F%A4%97%20HuggingFace-Dataset-yellow" alt="Dataset"></a>
   <a href="https://bytedance-seed.github.io/EdgeBench/"><img src="https://img.shields.io/badge/Docs-SForge%20Harness-purple" alt="Docs"></a>
   <a href="assets/wechat_qr.jpg"><img src="https://img.shields.io/badge/WeChat-Group-07C160?logo=wechat&logoColor=white" alt="WeChat Group"></a>
@@ -37,7 +37,7 @@
 
 **EdgeBench** is a benchmark of **134 real-world tasks** for evaluating how autonomous AI agents *learn from real-world environments*. Instead of measuring one-shot performance, EdgeBench places agents in executable task environments with realistic, multi-level feedback and lets them iterate for **12+ hours** per task — tracking the full trajectory of improvement, not just the final score. We publicly release **51 tasks** along with the full evaluation framework.
 
-Analyzing ~38,000 hours of agent interaction on all 134 tasks, we find that **performance follows a log-sigmoid scaling law as a function of interaction time** ($R^2 = 0.998$). See the [tech report](https://edge-bench.org/paper.pdf) for details.
+Analyzing ~38,000 hours of agent interaction on all 134 tasks, we find that **performance follows a log-sigmoid scaling law as a function of interaction time** ($R^2 = 0.998$). See the [tech report](https://arxiv.org/abs/2607.05155) for details.
 
 <p align="center">
   <img src="assets/fig_full_136_curve_fit_side_by_side.png" alt="Log-sigmoid scaling fit across 134 tasks" width="800">
@@ -214,7 +214,7 @@ If you find EdgeBench useful in your research, please cite our tech report:
   title  = {EdgeBench: Unveiling Scaling Laws of Learning from Real-World Environments},
   author = {Deyao Zhu and Xin Zhou and Shengling Qin and Xuekai Zhu and Hangliang Ding and Shu Zhong and others},
   year   = {2026},
-  url    = {https://edge-bench.org/paper.pdf},
+  url    = {https://arxiv.org/abs/2607.05155},
 }
 ```
 
