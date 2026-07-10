@@ -1,0 +1,29 @@
+{
+  "task_id": "trinity_text_adventure",
+  "name": "Trinity Text Adventure",
+  "category": "Interactive Games & Simulators",
+  "base_image": "python310",
+  "platform": "linux/amd64",
+  "internet": false,
+  "game_mode": true,
+  "cwd": "/home/jericho_agent",
+  "submit_paths": [],
+  "work": {
+    "image_tag": "61ded5caecc2",
+    "specs_dir": "/home/jericho_agent",
+    "agent_query": "## Trinity — Jericho Text Adventure\n\nPlay the interactive fiction game *Trinity* by sending commands via an HTTP API and maximize your score.\n"
+  },
+  "judge": {
+    "image_tag": "fcaad5fa630f",
+    "eval_cmd": "",
+    "eval_timeout": 600,
+    "parser": "",
+    "selection": "score_first",
+    "game_server_cmd": "python /tmp/game_server_app.py --rom /home/roms/trinity.z4",
+    "rescale": {
+      "kind": "linear",
+      "lower": 0.0,
+      "upper": 100.0
+    }
+  }
+}

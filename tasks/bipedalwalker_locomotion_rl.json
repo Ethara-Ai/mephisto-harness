@@ -1,0 +1,40 @@
+{
+  "task_id": "bipedalwalker_locomotion_rl",
+  "name": "Bipedalwalker Locomotion Rl",
+  "category": "Scientific Problems & ML",
+  "base_image": "python",
+  "platform": "linux/amd64",
+  "internet": false,
+  "cwd": "/home/workspace/loco-rl",
+  "submit_paths": [
+    "submission/"
+  ],
+  "submit_exclude": [
+    "submission/eval_results.json",
+    "submission/checkpoints/",
+    "submission/*.log",
+    "submission/*.tmp",
+    "__pycache__/",
+    "eval/",
+    "sebench_eval.py",
+    ".git/"
+  ],
+  "work": {
+    "image_tag": "f9a2f8394c09",
+    "specs_dir": "/home/workspace/loco-rl",
+    "agent_query": "## Role\n\nYou are a Python and reinforcement-learning systems engineer optimizing a CPU-only locomotion agent.\n\n## Project\n\nRead `task_prompt.md`, `README.md`, `baseline/train_baseline.py`, and `envs/locomotion_env.py`. The editable submission area is `submission/`.\n\n## Objective\n\nTrain a BipedalWalker policy on CPU in this work container and save the final trained checkpoint as `submission/policy.pth`. The trusted judge does not run training; it only receives the submitted checkpoint and evaluates it on BipedalWalker-v3 and BipedalWalkerHardcore-v3.\n\n## Constraints\n\n- Keep your final implementation and checkpoint under `submission/`.\n- `submission/policy.pth` is submitted and required. Keep intermediate checkpoints outside `submission/` or under `submission/checkpoints/`.\n- You may provide `submission/policy.py` for custom PyTorch architectures; the judge supports `load_policy(path)`, `build_policy(checkpoint)`, or a `Policy` class.\n- Do not download or use pretrained policies, external RL libraries, or hidden evaluator files.\n- Use CPU only; CUDA is disabled during evaluation.\n- Hidden evaluator code is not present in this work container.\n- Trusted feedback is aggregate-only: reward summaries and scoring components are shown, but evaluator internals are not exposed.\n- Do not start with a long training run. First run smoke tests and short training loops; keep early iterations under 10 minutes, submit, then scale up once checkpoint loading works.\n- Submit whenever you have a candidate `submission/policy.pth` and want trusted feedback.\n\n## Time-Budget Workflow\n\nUse the available 2-hour agent window for active improvement. Do not stop after the first loadable checkpoint; submit within the first 30 minutes, then continue training, tuning, debugging, and submitting stronger checkpoints until you are close to the time limit. Do not idle or sleep just to consume wall-clock time.\n\n## Deliverable\n\nA final `submission/policy.pth`, plus any required `submission/policy.py`/`submission/train.py`, that the judge can load and evaluate."
+  },
+  "judge": {
+    "image_tag": "2db504ff563a",
+    "eval_cmd": "cd /home/workspace/loco-rl && SEBENCH_LOCO_EVAL_EPISODES=${SEBENCH_LOCO_EVAL_EPISODES:-10} python sebench_eval.py",
+    "eval_timeout": 900,
+    "parser": "structured_json",
+    "score_direction": "maximize",
+    "selection": "valid_then_score",
+    "rescale": {
+      "kind": "linear",
+      "lower": 0.0,
+      "upper": 100.0
+    }
+  }
+}

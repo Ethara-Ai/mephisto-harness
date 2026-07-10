@@ -1,0 +1,31 @@
+{
+  "task_id": "combinatorial_games_formalization",
+  "name": "Combinatorial Games Formalization",
+  "category": "Formal Math & Theorem Proving",
+  "base_image": "lean_4_28_0_main",
+  "platform": "linux/amd64",
+  "internet": false,
+  "cwd": "/home/workspace/",
+  "submit_paths": [
+    "se-bmk-intern/combinatorial-games"
+  ],
+  "submit_exclude": [
+    "se-bmk-intern/combinatorial-games/.lake"
+  ],
+  "work": {
+    "image_tag": "b6f1b58f681e",
+    "specs_dir": null,
+    "agent_query": "You are a lean4 expert, now your task is to finish **all** sorries in this folder. Pay no attention to anything outside this folder. There are many sorries but do not be afraid as we value minor progress and the time is abundant. Try to do some easy problems and accumulate scores each round. Before you submit, run a `lake build` to verify the changes locally - if the build failed, no score will be given. Also, do not modify the signature of existing lemma/theorem/def as these changes will not pass the judge evaluation."
+  },
+  "judge": {
+    "image_tag": "e4e88a24e340",
+    "eval_cmd": "cd /home/workspace/se-bmk-intern/combinatorial-games && cp -r /home/workspace/baseline/.lake . && cp /home/workspace/baseline/lake-manifest.json . && lake build && cp /home/workspace/judge/se-bmk-intern/combinatorial-games/ListDeclAxiom.lean . && cd /home/workspace/judge/se-bmk-intern && python3 eval_lean.py --baseline-repo /home/workspace/judge/se-bmk-intern/combinatorial-games --current-repo /home/workspace/se-bmk-intern/combinatorial-games",
+    "eval_timeout": 2400,
+    "parser": "structured_json",
+    "rescale": {
+      "kind": "linear",
+      "lower": 0.0,
+      "upper": 1.0
+    }
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "task_id": "triangulation_coloring_optimization",
+  "name": "Triangulation Coloring Optimization",
+  "category": "Combinatorial Optimization",
+  "base_image": "python310",
+  "platform": "linux/amd64",
+  "internet": false,
+  "cwd": "/home/workspace/triangulation_coloring",
+  "submit_paths": [
+    "solution.py"
+  ],
+  "work": {
+    "image_tag": "d3af8893fa81",
+    "specs_dir": "/home/workspace/triangulation_coloring",
+    "agent_query": "## Triangulation Coloring - Minimize Ugliness (CodeChef TRICOL)\n\nWrite `solution.py` in the project root (stdin → stdout). All modifications must be made only in `solution.py`.\n\nRead `README.md`, `tools/README.md`, and **`sample_data/README.md`**. Official scoring: flips change the triangulation; **U** (ugly triangles) is counted on the **final** triangulation after all flips.\n\n---\n\n## Evaluation\n\n- **10 hidden judge cases**, each **N=512**\n- **G = X·C + Y·F + U²** per case; **total score = sum** (lower is better)\n---\n\n## Local Testing\n\nUse the **3 pre-built N=512 files** in `sample_data/`. Use only these pre-built cases; do **not** call `tools/src/gen.py` or generate random local cases.\n\n```bash\n./eval_sample_data.sh\n# or per file:\npython3 solution.py < sample_data/0000.txt > output.txt\n./tools/bin/tester sample_data/0000.txt output.txt\n```\n\nAlso try `sample_data/0001.txt` and `sample_data/0002.txt`.\n\nWhen `./eval_sample_data.sh` improves, **submit** for all 10 hidden judge cases.\n\n---\n\n## Strategy (algorithm exploration)\n\nFocus on improving **`solution.py`** using `sample_data/` for feedback:\n\n1. **Joint optimization** — recolor and flip interact; optimize them together, not in tiny fixed phases.\n2. **U² dominates** on hard cases — reducing ugly triangles by even a few often beats tweaking C/F.\n3. **Iterate**: change algorithm → `./eval_sample_data.sh` → submit when promising.\n4. Do **not** loop local tests endlessly; move to submit after a few sample checks.\n\n---\n\n## Rules\n\n- Only modify `solution.py`; do **not** change `tools/` or `sample_data/`\n- Output: line 1 `C F`, line 2 color string (length N), then `F` flip lines (1-indexed vertex pairs)\n- The local `tester` applies flips exactly like the judge\n"
+  },
+  "judge": {
+    "image_tag": "568aa1a5a8ff",
+    "eval_cmd": "cd /home/workspace/triangulation_coloring && python3 /tmp/eval_triangulation_coloring.py",
+    "eval_timeout": 1200,
+    "parser": "score_sum",
+    "score_direction": "minimize",
+    "selection": "score_first",
+    "rescale": {
+      "kind": "piecewise_log_min",
+      "baseline": 6102378.0,
+      "rank30": 3372655.0,
+      "rank1": 200033.0,
+      "super_anchor": 100016.5
+    }
+  }
+}

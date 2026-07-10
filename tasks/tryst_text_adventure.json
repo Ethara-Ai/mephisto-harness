@@ -1,0 +1,29 @@
+{
+  "task_id": "tryst_text_adventure",
+  "name": "Tryst Text Adventure",
+  "category": "Interactive Games & Simulators",
+  "base_image": "python310",
+  "platform": "linux/amd64",
+  "internet": false,
+  "game_mode": true,
+  "cwd": "/home/jericho_agent",
+  "submit_paths": [],
+  "work": {
+    "image_tag": "61ded5caecc2",
+    "specs_dir": "/home/jericho_agent",
+    "agent_query": "## Tryst of Fate — Jericho Text Adventure\n\nPlay the interactive fiction game *Tryst of Fate* by sending commands via an HTTP API and maximize your score.\n"
+  },
+  "judge": {
+    "image_tag": "9e1dff6f3aa6",
+    "eval_cmd": "",
+    "eval_timeout": 600,
+    "parser": "",
+    "selection": "score_first",
+    "game_server_cmd": "python /tmp/game_server_app.py --rom /home/roms/tryst205.z5",
+    "rescale": {
+      "kind": "linear",
+      "lower": 0.0,
+      "upper": 350.0
+    }
+  }
+}

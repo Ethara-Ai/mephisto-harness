@@ -1,0 +1,33 @@
+{
+  "task_id": "wesnoth_tactical_ai",
+  "name": "Wesnoth Tactical Ai",
+  "category": "Interactive Games & Simulators",
+  "base_image": "python310",
+  "platform": "linux/amd64",
+  "internet": false,
+  "cwd": "/home/wesnoth_agent",
+  "submit_paths": [
+    "."
+  ],
+  "submit_exclude": [
+    ".git"
+  ],
+  "work": {
+    "image_tag": "43d1943974c7",
+    "specs_dir": "/home/wesnoth_agent",
+    "agent_query": "## Wesnoth Tactical AI\n\nWrite a Lua AI for The Battle for Wesnoth 1.18 that wins turn-based multiplayer matches against the default AI.\n\n---\n\n## Goal\n\nMaximize **total_score = 80 x win_rate + 20 x avg_efficiency**, evaluated over 3 maps x N seeds (default 10) x N repeats (default 2) as side 1 (your AI) vs side 2 (default Wesnoth AI).\n\n- `win_rate` = wins / total_games\n- `avg_efficiency` = mean(min(1, baseline_turns / actual_turns)) over wins only\n\nBaseline turn counts (default vs default): `Weldyn_Channel=16`, `The_Freelands=15`, `Fallenstar_Lake=20`.\n\nNote: The baseline AI (default C++ CAs) typically scores 0-20. Focus on incremental improvements.\n\n---\n\n## API Restrictions (CRITICAL — violation = score=0 and hack flag)\n\nForbidden APIs (not for AI decisions):\n- `wesnoth.wml_actions.*` — scene design API (WML actions like kill, message, etc.), NOT for AI decisions\n- `wesnoth.game_events.*` — can fire arbitrary WML events, NOT for AI decisions\n- `os.execute` — system command execution\n- `io.open` — file system access\n- `debug.*` — can bypass sandbox restrictions\n\nAllowed APIs (AI decision APIs):\n- `wesnoth.units.*` — unit queries (find_on_map, etc.)\n- `wesnoth.current.*` — current game state\n- `wesnoth.sides.*` — side information (gold, recruit list, villages, etc.)\n- `wesnoth.map.*` — map queries\n- `wesnoth.interface.*` — chat messages, UI\n- `wesnoth.ai.*` — AI aspects and actions\n\nUsing forbidden APIs or attempting to bypass restrictions (e.g., string concatenation, metatable manipulation, variable indirection) will result in score=0 and the submission marked as hack.\n\n---\n\n## Files you must write in `/home/wesnoth_agent/`\n\n1. `my_custom_ai.cfg` — AI definition (WML). Must include `id=my_custom_ai`, a `[stage]`, and `[candidate_action]` blocks.\n2. Any number of `*.lua` files referenced by `location=...` in the cfg.\n\nA baseline `my_custom_ai.cfg` already exists (uses default C++ CAs). Improve it.\n\n---\n\n## Wesnoth CA configuration (key rules from docs)\n\n- Config file must have `id=` field, else wesnoth skips it with \"skipped AI config due to missing id\".\n- CAs must be inside `[stage]` with `name=ai_default_rca::candidate_action_evaluation_loop`.\n- For a Lua CA, use `engine=lua` + `location=\"~add-ons/my_ai/my_recruit.lua\"`. The Lua file must `return` a table whose `:evaluation()` and `:execution()` methods drive the CA.\n- Do NOT mix `location` with inline `evaluation=`/`execution=`.\n- `--ai-config` does not accept absolute paths; only wesnoth-relative or `~add-ons/...`.\n- Do NOT use `[kill]`, `[event]`, or `[command]` WML tags in your .cfg file — these are scene design tools, not AI decision mechanisms.\n\n### Example Lua CA (place in `my_recruit.lua`)\n```lua\nlocal my_recruit = {}\nfunction my_recruit:evaluation()\n  local side = wesnoth.current.side\n  local leader = wesnoth.units.find_on_map({ side = side, canrecruit = true })[1]\n  if not leader or wesnoth.sides[side].gold < 14 then return 0 end\n  return 300000\nend\nfunction my_recruit:execution()\n  local side = wesnoth.current.side\n  local recruit_types = wesnoth.sides[side].recruit\n  if recruit_types and #recruit_types > 0 then\n    wesnoth.interface.add_chat_message('my_ai', 'Recruiting ' .. recruit_types[1])\n  end\nend\nreturn my_recruit\n```\n\n---\n\n## Local Testing\n\nRun a quick game locally to verify your AI loads:\n```bash\nwesnoth --nogui --multiplayer --nosound \\\n  --controller 1:ai --controller 2:ai \\\n  --ai-config 1:~add-ons/my_ai/my_custom_ai.cfg \\\n  --scenario multiplayer_Weldyn_Channel \\\n  --log-debug=ai/testing\n```\n\n---\n\n## Rules\n- Write your AI as `my_custom_ai.cfg` and optional `*.lua` files in `/home/wesnoth_agent/`\n- Do NOT modify files outside `/home/wesnoth_agent/`\n- Do NOT delete `.config/` or `.cache/` directories — the evaluation system handles add-ons installation automatically\n- Your AI plays as side 1\n- Run your AI locally to verify it loads before finishing\n- Submit for evaluation\n\n## Strategy Hints\n- The default AI is decent at combat but poor at strategic recruit selection and village capture timing.\n- Lua CAs give you full control over move ordering, targeting, and recruitment.\n- Focus on: (1) efficient recruitment, (2) village capture, (3) focus-fire kills, (4) leader safety.\n- Read `my_custom_ai.cfg` for the baseline structure.\n"
+  },
+  "judge": {
+    "image_tag": "2856cf56b832",
+    "eval_cmd": "python3 /tmp/eval_wesnoth.py",
+    "eval_timeout": 900,
+    "parser": "score_sum",
+    "score_direction": "maximize",
+    "selection": "score_first",
+    "rescale": {
+      "kind": "linear",
+      "lower": 0.0,
+      "upper": 100.0
+    }
+  }
+}

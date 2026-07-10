@@ -1,0 +1,39 @@
+{
+  "task_id": "git_rewrite_in_zig",
+  "name": "Git Rewrite In Zig",
+  "category": "Systems & Software Engineering",
+  "base_image": "cpp",
+  "platform": "linux/amd64",
+  "internet": false,
+  "cwd": "/home/workspace/zig-port",
+  "submit_paths": [
+    "."
+  ],
+  "submit_exclude": [
+    ".git",
+    "zig-cache",
+    "zig-out",
+    ".zig-cache",
+    "zig-port/zig-cache",
+    "zig-port/zig-out",
+    "zig-port/.zig-cache"
+  ],
+  "work": {
+    "image_tag": "3e1aae9f830c",
+    "specs_dir": "/home/workspace",
+    "agent_query": "# Git to Zig\n\nReimplement git in Zig as a drop-in replacement for the `git` binary. The C\nsource for git v2.47.0 is at `/home/workspace/git-src/` — read it, understand it, and\nrewrite it. Your binary must behave identically to the real `git` — same CLI\ninterface, same output formats, same exit codes.\n\nYour workspace is `/home/workspace/zig-port/` with a build scaffold that already compiles\nand links zlib. `zig build` produces `zig-out/bin/git`. The system `git` is\ninstalled — use it to test your implementation as you go.\n\nNo internet. Do not compile or link the C source or wrap around the existing git binary — write Zig.\nWork autonomously, do not ask user for input.\n"
+  },
+  "judge": {
+    "image_tag": "0d404251e9c9",
+    "eval_cmd": "mkdir -p /logs/verifier /tmp/verifier && ln -sfn /home/workspace /app && ln -sfn /opt/tests /tests && ln -sfn /tmp/verifier /logs/verifier 2>/dev/null; export APP_DIR=/home/workspace VERIFIER_DIR=/logs/verifier && bash /opt/tests/test.sh >/tmp/verifier.log 2>&1 || true; cat /tmp/verifier.log >&2; bash /opt/tests/pytest_shim.sh \"/logs/verifier/reward.json\"",
+    "eval_timeout": 7200,
+    "parser": "pytest_v",
+    "score_direction": "maximize",
+    "selection": "score_first",
+    "rescale": {
+      "kind": "linear",
+      "lower": 0.0,
+      "upper": 1.0
+    }
+  }
+}

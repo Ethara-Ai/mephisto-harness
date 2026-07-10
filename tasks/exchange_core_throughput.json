@@ -1,0 +1,35 @@
+{
+  "task_id": "exchange_core_throughput",
+  "name": "Exchange Core Throughput",
+  "category": "Systems & Software Engineering",
+  "base_image": "java",
+  "platform": "linux/amd64",
+  "internet": false,
+  "cwd": "/home/workspace/exchange-core",
+  "submit_paths": [
+    "src/main/",
+    "pom.xml",
+    ".mvn/"
+  ],
+  "submit_exclude": [
+    "src/test"
+  ],
+  "work": {
+    "image_tag": "cc0c0eabbf80",
+    "specs_dir": "/home/workspace/exchange-core",
+    "agent_query": "## Role\n\nYou are a performance engineer optimizing **exchange-core**, an LMAX Disruptor–based open-source financial matching engine (Java 8, Maven). Your goal is to maximize the throughput (MT/s — millions of transactions per second) of `PerfThroughput#testThroughputPeak`.\n\n---\n\n## Repository Layout\n\n- `src/main/java/...` — engine source (OrderBook, matching service, risk engine, Disruptor wiring, etc.)\n- `src/main/resources/` — logging etc.\n- `pom.xml` — Maven build (Java 1.8 source/target)\n- Tests have been removed from the work container — the judge will re-apply the official throughput test.\n\n---\n\n## Benchmark\n\nThe judge runs (with Java 17 runtime, compiled to 1.8 bytecode):\n\n```bash\nmvn -B test -Dtest=PerfThroughput#testThroughputPeak\n```\n\nThe test calls `PerformanceConfiguration.throughputPerformanceBuilder().ringBufferSize(32 * 1024).build()` — only ringBufferSize is overridden; ME/RE, msgsInGroupLimit and other parameters use the builder defaults (4ME+2RE, msgsInGroupLimit=4096, BUSY_SPIN wait, DirectImpl orderbook, AffinityThreadFactory). **You can change these defaults by editing `throughputPerformanceBuilder()` in `PerformanceConfiguration.java`.** The test uses 100 symbols, 10K accounts, 10K orders, 3M transactions — a multi-symbol peak throughput scenario where thread topology changes (e.g. 4ME+2RE → 2ME+1RE) can have dramatic impact.\n\nThe test prints rounds like `\"<i>. <X.XXX> MT/s\"` and a final `\"Average: <Z.ZZZ> MT/s\"`. Higher is better.\n\n---\n\n## Optimization Directions (suggestions)\n\n- Thread topology: matching engine (ME) / risk engine (RE) thread counts, pinning via `CoreWaitStrategy`\n- Disruptor wait strategy, ring-buffer size, producer type\n- OrderBook implementation (array-based, naive, direct)\n- Message grouping / batching (message-group parameters)\n- Java GC choice (G1 / ZGC) and heap sizing via `MAVEN_OPTS`\n- Reduce allocations in hot path\n\nKimi K2.6 reference: 0.43 → 1.24 MT/s (+185%) by dropping from 4ME+2RE to 2ME+1RE.\n\n---\n\n## Rules\n\n- Do NOT modify test files (the judge re-applies them)\n- Do NOT change behavior: `mvn test` must still pass functional assertions\n- You may freely edit `src/main/java/**`, `pom.xml`, and add `MAVEN_OPTS` via a `.mvn/jvm.config` or `.mvn/maven.config` file\n- The score is `int(round(Average_MT_s * 1000))` (e.g. 1.243 → 1243)\n- `CASES_OK = 1` only when `mvn test` exits 0 AND an MT/s line was parsed\n"
+  },
+  "judge": {
+    "image_tag": "2cbf65650b3c",
+    "eval_cmd": "cd /home/workspace/exchange-core && python3 /tmp/eval_exchange_core.py",
+    "eval_timeout": 2400,
+    "parser": "score_sum",
+    "score_direction": "maximize",
+    "selection": "score_first",
+    "rescale": {
+      "kind": "log_max",
+      "baseline": 2090.634594076933,
+      "expert": 6000.0
+    }
+  }
+}

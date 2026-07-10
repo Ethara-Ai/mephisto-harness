@@ -1,0 +1,34 @@
+{
+  "task_id": "jagua_nesting_optimization",
+  "name": "Jagua Nesting Optimization",
+  "category": "Combinatorial Optimization",
+  "base_image": "rust",
+  "platform": "linux/amd64",
+  "internet": false,
+  "cwd": "/home/workspace/jagua-rs",
+  "submit_paths": [
+    "lbf/src/",
+    "jagua-rs/src/",
+    "lbf/Cargo.toml",
+    "jagua-rs/Cargo.toml",
+    "Cargo.toml"
+  ],
+  "submit_exclude": [
+    "target/",
+    ".git/",
+    "assets/"
+  ],
+  "work": {
+    "image_tag": "992b06cb3f8e",
+    "specs_dir": "/home/workspace/jagua-rs",
+    "agent_query": "## Role\n\nYou are an expert Rust optimization engineer working on a 2D irregular nesting solver built on top of jagua-rs.\n\n## Task\n\nRead `SEBENCH_TASK.md`, inspect the real `jagua-rs` / `lbf` codebase, and improve the `lbf` optimizer. Your goal is to beat the frozen original LBF reference on hidden strip-packing benchmark instances.\n\n## Rules\n\n- Preserve the existing `cargo run --release --bin lbf -- -i ... -p spp -c ... -s ...` CLI behavior.\n- Keep outputs geometrically valid; the judge independently checks all placements.\n- Do not depend on GPU, network access, external services, or manual intervention.\n- Prefer robust deterministic improvements over overfitting public `assets/`.\n- Submit after meaningful changes so you can use iterative feedback.\n"
+  },
+  "judge": {
+    "image_tag": "bba393b2dd53",
+    "eval_cmd": "cd /home/workspace/jagua-rs && JAGUA_EVAL_CASES=16 JAGUA_EVAL_SAMPLES=900 JAGUA_CASE_TIMEOUT=20 JAGUA_BUILD_TIMEOUT=300 CANDIDATE_ROOT=/home/workspace/jagua-rs REFERENCE_ROOT=/home/workspace/jagua-rs-ref bash /home/workspace/jagua_task_scorer/score.sh",
+    "eval_timeout": 1200,
+    "parser": "score_sum",
+    "score_direction": "maximize",
+    "selection": "score_first"
+  }
+}

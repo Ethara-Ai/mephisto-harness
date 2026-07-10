@@ -1,0 +1,32 @@
+{
+  "task_id": "vibrating_path_graph_coloring",
+  "name": "Vibrating Path Graph Coloring",
+  "category": "Combinatorial Optimization",
+  "base_image": "python310",
+  "platform": "linux/amd64",
+  "internet": false,
+  "cwd": "/home/workspace/vibrating_path",
+  "submit_paths": [
+    "solution.py"
+  ],
+  "work": {
+    "image_tag": "e5597c7f3c12",
+    "specs_dir": "/home/workspace/vibrating_path",
+    "agent_query": "## Vibrating Path - Graph K-Coloring (CodeChef VBR)\n\nWrite `solution.py` in the project root that reads from stdin and writes to stdout.\n\n---\n\n## Problem Overview\n\nRead `README.md` and `tools/README.md` for full problem details. A baseline `solution.py` already exists (it produces syntactically valid but low-quality output). Your job is to improve it.\n\n---\n\n## Evaluation\n\nYour solution is scored on **50 fixed test cases**. Final score = sum of individual case scores. **Lower is better.**\n\n---\n\n## Local Testing\n\nGenerate local random tests with `./tools/bin/gen <seed>`, using seeds in the range **0..10000** only.\n\n```bash\n# Generate a random test case (seed-based, deterministic)\n./tools/bin/gen 1 > input.txt\n\n# Run your solution\npython3 solution.py < input.txt > output.txt\n\n# Score output (Lower is better)\n./tools/bin/tester input.txt output.txt\n# Outputs to stderr: Score = <N>\n```\n\n---\n\n## Rules\n\n- Write your solution as `solution.py` in the project root directory\n- Do NOT modify files in `tools/`\n- Use `tools/bin/gen` and `tools/bin/tester` for local testing\n- Your program should read from stdin and write to stdout\n- Run your solution to completion and verify with the tester before finishing\n"
+  },
+  "judge": {
+    "image_tag": "eb22343ce84e",
+    "eval_cmd": "cd /home/workspace/vibrating_path && python3 /tmp/eval_vibrating_path.py",
+    "eval_timeout": 600,
+    "parser": "score_sum",
+    "score_direction": "minimize",
+    "selection": "score_first",
+    "rescale": {
+      "kind": "piecewise_log_min",
+      "baseline": 31051708.0,
+      "rank30": 3288665.0,
+      "rank1": 2181554.0,
+      "super_anchor": 1904776.25
+    }
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "task_id": "equivalence_class_divide_and_conquer",
+  "name": "Equivalence Class Divide And Conquer",
+  "category": "Combinatorial Optimization",
+  "base_image": "cpp",
+  "platform": "linux/amd64",
+  "internet": false,
+  "cwd": "/home/workspace/p2",
+  "submit_paths": [
+    "T1.cpp",
+    "T2.cpp",
+    "T3.cpp",
+    "T4.cpp",
+    "T5.cpp",
+    "T6.cpp"
+  ],
+  "submit_exclude": [],
+  "work": {
+    "image_tag": "7d6371e4948e",
+    "specs_dir": "/home/workspace/p2",
+    "agent_query": "You need to complete six problems, with a total score of 100 points. The six problems are worth 5, 5, 10, 15, 25, and 40 points respectively. Each problem has several groups of test data. If all test data for a problem pass, you receive the full score for that problem. If a problem does not pass all test data but does pass some subtasks/test points, each passed subtask/test point can receive only half of its original score. Please work on the problems in order, with the goal of solving them as much as possible. These problems are progressive; if you do not know how to solve a later problem, it is recommended that you review the methods used for earlier problems and look for ideas there.\nWhen submitting code, the code files for the six problems should be named T1.cpp T2.cpp T3.cpp T4.cpp T5.cpp T6.cpp.\n"
+  },
+  "judge": {
+    "image_tag": "de7206e7e06d",
+    "eval_cmd": "cd /home/workspace/p2 && python3 /opt/p2_judge/prob/P2/eval.py --source-root /home/workspace/p2 --time-factor 1 --time-grace 0 --score-sum",
+    "eval_timeout": 900,
+    "parser": "score_sum",
+    "score_direction": "maximize",
+    "rescale": {
+      "kind": "linear",
+      "lower": 0.0,
+      "upper": 100.0
+    }
+  }
+}

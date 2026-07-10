@@ -1,0 +1,38 @@
+{
+  "task_id": "k12_math_recommendation",
+  "name": "K12 Math Recommendation",
+  "category": "Professional Knowledge Work",
+  "base_image": "python",
+  "platform": "linux/amd64",
+  "internet": false,
+  "cwd": "/home/workspace",
+  "submit_paths": [
+    "train.py",
+    "infer.py",
+    "models",
+    "submission.json",
+    "requirements.txt",
+    "README.md"
+  ],
+  "submit_exclude": [
+    ".git",
+    "__pycache__",
+    "*.pyc",
+    "node_modules",
+    "bin",
+    "obj"
+  ],
+  "work": {
+    "image_tag": "fecdcfb17904",
+    "specs_dir": null,
+    "agent_query": "Read the complete task instructions in `/home/workspace/task_instruction.md`, and complete the task according to those requirements. The final deliverables must be written to the file paths specified in `task_instruction.md`.\n"
+  },
+  "judge": {
+    "image_tag": "1faabfecdb8e",
+    "eval_cmd": "cd /home/workspace && python3 scoring/score.py",
+    "eval_timeout": 900,
+    "parser": "structured_json",
+    "score_direction": "maximize",
+    "selection": "score_first"
+  }
+}

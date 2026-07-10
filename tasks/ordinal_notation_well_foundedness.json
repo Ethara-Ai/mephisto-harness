@@ -1,0 +1,53 @@
+{
+  "task_id": "ordinal_notation_well_foundedness",
+  "name": "Ordinal Notation Well Foundedness",
+  "category": "Formal Math & Theorem Proving",
+  "base_image": "coq",
+  "platform": "linux/amd64",
+  "internet": false,
+  "cwd": "/home/workspace/ordinal_notation_wf",
+  "submit_paths": [
+    "."
+  ],
+  "submit_exclude": [
+    ".git",
+    ".coq-native",
+    "_CoqProject",
+    "Makefile.coq",
+    "Makefile.coq.conf",
+    "*.aux",
+    ".*.aux",
+    "*.d",
+    "*.glob",
+    "*.vo",
+    "*.vos",
+    "*.vok",
+    "*.vio",
+    "eval_task*.v",
+    "ChildOf.v",
+    "debug*.v",
+    "test*.v",
+    "check*.v",
+    "explore*.v",
+    "tmp*.v",
+    "scratch*.v"
+  ],
+  "work": {
+    "image_tag": "690c1a245369",
+    "specs_dir": "/home/workspace/ordinal_notation_wf",
+    "agent_query": "Read `README.md` in the workspace, then complete as many Coq proof targets as possible. Submit for judge feedback."
+  },
+  "judge": {
+    "image_tag": "064b4eb91e22",
+    "eval_cmd": "python3 /opt/sebench/ordinal_notation_wf_eval.py",
+    "eval_timeout": 7200,
+    "parser": "structured_json",
+    "score_direction": "maximize",
+    "selection": "score_first",
+    "rescale": {
+      "kind": "linear",
+      "lower": 0.0,
+      "upper": 85.0
+    }
+  }
+}

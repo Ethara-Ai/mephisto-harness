@@ -1,0 +1,35 @@
+{
+  "task_id": "graph_node_classification",
+  "name": "Graph Node Classification",
+  "category": "Scientific Problems & ML",
+  "base_image": "python",
+  "platform": "linux/amd64",
+  "internet": false,
+  "cwd": "/home/workspace/045_graph_node_classification",
+  "submit_paths": [
+    "solution/solution.py"
+  ],
+  "submit_exclude": [
+    "tests/",
+    "**/__pycache__/**",
+    "**/*.pyc"
+  ],
+  "work": {
+    "image_tag": "4d2c1f502d14",
+    "specs_dir": "/home/workspace/045_graph_node_classification",
+    "agent_query": "Solve the graph node classification task described in `README.md` and `solution/problem.md`."
+  },
+  "judge": {
+    "image_tag": "f2ddd52992ae",
+    "eval_cmd": "cd /home/workspace/045_graph_node_classification && CUDA_VISIBLE_DEVICES= NVIDIA_VISIBLE_DEVICES=none python judge_eval.py",
+    "eval_timeout": 1800,
+    "parser": "structured_json",
+    "score_direction": "maximize",
+    "selection": "valid_then_score",
+    "rescale": {
+      "kind": "linear",
+      "lower": 0.0,
+      "upper": 1.0
+    }
+  }
+}

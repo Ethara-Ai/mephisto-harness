@@ -1,0 +1,30 @@
+{
+  "task_id": "openttd_transport_ai",
+  "name": "Openttd Transport Ai",
+  "category": "Interactive Games & Simulators",
+  "base_image": "python310",
+  "platform": "linux/amd64",
+  "internet": false,
+  "cwd": "/home/workspace/openttd_ai",
+  "submit_paths": [
+    "my_ai/"
+  ],
+  "work": {
+    "image_tag": "185f9fda78f2",
+    "specs_dir": "/home/workspace/openttd_ai/docs",
+    "agent_query": "## Role\n\nYou are an expert OpenTTD AI script developer. Write a **Squirrel** AI in `my_ai/` that maximizes **company value** over 20 game-years, averaged across multiple random seed maps.\n\n---\n\n## Files\n\n- `my_ai/info.nut` — AI metadata (class `MyAI extends AIInfo`, `GetAPIVersion()` returns \"13\")\n- `my_ai/main.nut` — AI controller (class `MyAI extends AIController`, implements `Start()`, `Save()`, `Load()`)\n- `docs/squirrel_reference.html` — Squirrel 2.2 language reference (offline)\n- `docs/noai_tutorial.html` — NoAI introductory tutorial (offline)\n- `docs/noai_api_docs/` — full NoAI API (115 classes, offline HTML)\n\n---\n\n## Game Background\n\nOpenTTD (Transport Tycoon Deluxe clone) simulates a transport company: build roads / rails / airports / ships, connect towns and industries, buy vehicles, manage finances. The NoAI framework runs Squirrel scripts to control a company headlessly. Your AI is the only company on the map (no competitors).\n\n## Goal\n\nMaximize **`AICompany.GetCompanyValue(AICompany.COMPANY_SELF)`** (= vehicle value at 1.5× purchase + infrastructure value + cash − loans). Use `AILog.Info(...)` / `AILog.Warning(...)` for debugging.\n\n## Local Testing\n\nInstall OpenTTDLab (already installed). Run locally with:\n\n```python\nfrom openttdlab import run_experiments, local_folder\nresults = run_experiments(openttd_version='13.4', opengfx_version='7.1',\n    experiments=({'seed': s, 'ais': (local_folder('my_ai/', ai_name='MyAI'),),\n                  'days': 365*20} for s in range(5)))\n```\n\n## Rules\n\n- Write only in `my_ai/` (info.nut + main.nut + optional sub-squirrel files)\n- `CreateInstance()` in info.nut must return \"MyAI\" (matching main.nut's class name)\n- `GetAPIVersion()` must return `\"13\"` for OpenTTD 13.x compatibility\n- Do NOT modify anything under `docs/` — it's reference material\n- A baseline AI that just logs company value is already in `my_ai/`; improve it\n"
+  },
+  "judge": {
+    "image_tag": "ef9ac9e95c29",
+    "eval_cmd": "cd /home/workspace/openttd_ai && OPENTTD_N_SEEDS=5 python3 /tmp/eval_openttd.py",
+    "eval_timeout": 3600,
+    "parser": "score_sum",
+    "score_direction": "maximize",
+    "selection": "score_first",
+    "rescale": {
+      "kind": "log_max",
+      "baseline": 100000.0,
+      "expert": 1000000000.0
+    }
+  }
+}

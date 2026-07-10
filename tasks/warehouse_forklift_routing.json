@@ -1,0 +1,32 @@
+{
+  "task_id": "warehouse_forklift_routing",
+  "name": "Warehouse Forklift Routing",
+  "category": "Combinatorial Optimization",
+  "base_image": "python310",
+  "platform": "linux/amd64",
+  "internet": false,
+  "cwd": "/home/workspace/warehouse_manager",
+  "submit_paths": [
+    "solution.py"
+  ],
+  "work": {
+    "image_tag": "7a86216250d8",
+    "specs_dir": "/home/workspace/warehouse_manager",
+    "agent_query": "## Warehouse Manager - Forklift Operations Optimization (CodeChef WAREHOUS)\n\nWrite `solution.py` in the project root that reads from stdin and writes to stdout.\n\n---\n\n## Problem Overview\n\nChef's warehouse is an R x C grid. A forklift starts at the northwest corner (0,0). R*C-1 goods arrive one by one in a given order, must be loaded and placed in the warehouse, then later dispatched from the entrance in order 1, 2, ..., R*C-1.\n\nThe forklift can:\n- Move: N/S/E/W\n- Pick up (P) arriving goods at entrance\n- Dispatch (D) goods at entrance\n- Load (Lx) from adjacent cell in direction x\n- Unload (Ux) to adjacent cell in direction x\n\nA forklift carrying a good cannot enter an occupied cell. Minimize the total instruction string length.\n\n---\n\n## Constraints\n\n- T=5 test cases per input\n- 6 <= R, C <= 20\n- Output string length <= 500,000 per test case\n\n## Scoring Formula\n\nPer test case: (S + 2) / (R + C - 1) - 2*R*C + 20, where S = instruction string length. Score is averaged over T cases. **Minimize.**\n\n---\n\n## Input Format\n\n```\nT\nR_1 C_1\na_1 a_2 ... a_{R1*C1-1}\nR_2 C_2\na_1 a_2 ... a_{R2*C2-1}\n...\n```\n\n## Output Format\n\nOne line per test case: the forklift command string.\n\nCommands: N, S, E, W (move), P (pick up arrival), D (dispatch at entrance), Lx (load from direction x), Ux (unload to direction x).\n\n---\n\n## Runtime Limits\n\n- Time limit: 30 seconds per test case\n- Memory limit: 1 GB\n- No GPU\n\n---\n\n## Local Testing\n\nUse `./tools/bin/gen <seed>` for local testing with seeds in the range **0..10000** only.\n\n```bash\n./tools/bin/gen 1 > input.txt\npython3 solution.py < input.txt > output.txt\n./tools/bin/tester input.txt output.txt\n# stderr: Score = <number>\n```\n\nA baseline `solution.py` exists. Improve it.\n\n---\n\n## Strategy Hints\n\n- Plan storage positions to minimize movement during both placement and retrieval.\n- Consider placing goods that will be dispatched first (low IDs) near the entrance.\n- Use BFS for pathfinding in the grid.\n- The arrival order is random; you may need to temporarily rearrange goods.\n- Read `README.md` and `tools/README.md` for full problem details.\n\n## Rules\n\n- Write your solution as `solution.py` in the project root directory\n- Do NOT modify files in `tools/`\n- Use `tools/bin/gen` and `tools/bin/tester` for local testing\n- Your program should read from stdin and write to stdout\n- Run your solution to completion and verify with the tester before finishing"
+  },
+  "judge": {
+    "image_tag": "d342863c29cc",
+    "eval_cmd": "cd /home/workspace/warehouse_manager && python3 /tmp/eval_warehouse_manager.py",
+    "eval_timeout": 3600,
+    "parser": "score_sum",
+    "score_direction": "minimize",
+    "selection": "score_first",
+    "rescale": {
+      "kind": "piecewise_log_min",
+      "baseline": 23277.847205,
+      "rank30": 804.959064,
+      "rank1": 395.802847,
+      "super_anchor": 293.51379275
+    }
+  }
+}

@@ -1043,6 +1043,49 @@ def main():
     )
     p_fetch.set_defaults(func=cmd_fetch_tasks)
 
+    # author-clone-gut (handler is lazy-imported so tree_sitter isn't required for other commands)
+    p_author = subparsers.add_parser(
+        "author-clone-gut",
+        help="Author a clone-and-gut task from a git commit",
+    )
+    p_author.add_argument("--task-id", dest="task_id", required=True)
+    p_author.add_argument("--name", required=True)
+    p_author.add_argument("--category", required=True)
+    p_author.add_argument("--repo", required=True)
+    p_author.add_argument("--commit", required=True)
+    p_author.add_argument("--base", required=True)
+    p_author.add_argument("--lang", required=True,
+                          choices=["go", "python"])
+    p_author.add_argument("--gut", required=True, action="append",
+                          help="repeatable: 'path/to/file.go:Func1,Func2'")
+    p_author.add_argument("--cwd", required=True)
+    p_author.add_argument("--test-cmd", dest="test_cmd", required=True)
+    p_author.add_argument("--test-filter", dest="test_filter", required=True)
+    p_author.add_argument("--build-cmd", dest="build_cmd", default="")
+    p_author.add_argument("--cache-warm-cmd", dest="cache_warm_cmd", default="")
+    p_author.add_argument("--internet", action="store_true", default=False)
+    p_author.add_argument("--tier", default="auto",
+                          choices=["auto", "toy", "standard", "extreme"])
+    p_author.add_argument("--min-tests", dest="min_tests", type=int, default=20)
+    p_author.add_argument("--allow-precutoff", dest="allow_precutoff",
+                          action="store_true", default=False)
+    p_author.add_argument("--model-cutoff", dest="model_cutoff",
+                          default="2025-04-01")
+    p_author.add_argument("--no-calibrate", dest="no_calibrate",
+                          action="store_true", default=False)
+    p_author.add_argument("--gutted-max", dest="gutted_max", type=float, default=5)
+    p_author.add_argument("--golden-min", dest="golden_min", type=float, default=95)
+    p_author.add_argument("--eval-timeout", dest="eval_timeout", type=int, default=600)
+    p_author.add_argument("--out-dir", dest="out_dir", default="tasks")
+    p_author.add_argument("--dry-run", dest="dry_run", action="store_true", default=False)
+    p_author.add_argument("--force", action="store_true", default=False)
+    p_author.add_argument("--extra-notes", dest="extra_notes", default="")
+
+    def _author_wrapper(args):
+        from sforge.author.cli_entry import cmd_author_clone_gut
+        sys.exit(cmd_author_clone_gut(args))
+    p_author.set_defaults(func=_author_wrapper)
+
     args = parser.parse_args()
     args.func(args)
 

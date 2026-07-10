@@ -1,0 +1,29 @@
+{
+  "task_id": "anchorhead_text_adventure",
+  "name": "Anchorhead Text Adventure",
+  "category": "Interactive Games & Simulators",
+  "base_image": "python310",
+  "platform": "linux/amd64",
+  "internet": false,
+  "game_mode": true,
+  "cwd": "/home/jericho_agent",
+  "submit_paths": [],
+  "work": {
+    "image_tag": "61ded5caecc2",
+    "specs_dir": "/home/jericho_agent",
+    "agent_query": "## Anchorhead — Jericho Text Adventure\n\nPlay the interactive fiction game *Anchorhead* by sending commands via an HTTP API and maximize your score.\n"
+  },
+  "judge": {
+    "image_tag": "356542b1bce0",
+    "eval_cmd": "",
+    "eval_timeout": 600,
+    "parser": "",
+    "selection": "score_first",
+    "game_server_cmd": "python /tmp/game_server_app.py --rom /home/roms/anchor.z8",
+    "rescale": {
+      "kind": "linear",
+      "lower": 0.0,
+      "upper": 100.0
+    }
+  }
+}
