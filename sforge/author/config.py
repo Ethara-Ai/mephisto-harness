@@ -9,7 +9,7 @@ from pathlib import Path
 from sforge.author.errors import AuthorError
 
 
-VALID_LANGS = frozenset({"go", "rust", "python", "typescript"})
+VALID_LANGS = frozenset({"go", "rust", "python", "typescript", "c", "cpp", "java", "zig", "lean"})
 TASK_ID_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 DEFAULT_MODEL_CUTOFF = date(2025, 4, 1)
 

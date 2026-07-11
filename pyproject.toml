@@ -32,6 +32,11 @@ dependencies = [
     "tree_sitter>=0.24",
     "tree_sitter_go>=0.25",
     "tree_sitter_python>=0.25",
+    "tree_sitter_rust>=0.23",
+    "tree_sitter_typescript>=0.23",
+    "tree_sitter_c>=0.23",
+    "tree_sitter_cpp>=0.23",
+    "tree_sitter_java>=0.23",
 ]
 
 [project.scripts]

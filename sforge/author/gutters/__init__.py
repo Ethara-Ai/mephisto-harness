@@ -11,6 +11,11 @@ _LANG_MAP: dict[str, tuple[str, str]] = {
     "rust": ("sforge.author.gutters.rust", "RustGutter"),
     "python": ("sforge.author.gutters.python", "PythonGutter"),
     "typescript": ("sforge.author.gutters.typescript", "TypeScriptGutter"),
+    "c": ("sforge.author.gutters.c", "CGutter"),
+    "cpp": ("sforge.author.gutters.cpp", "CppGutter"),
+    "java": ("sforge.author.gutters.java", "JavaGutter"),
+    "zig": ("sforge.author.gutters.zig", "ZigGutter"),
+    "lean": ("sforge.author.gutters.lean", "LeanGutter"),
 }
 
 

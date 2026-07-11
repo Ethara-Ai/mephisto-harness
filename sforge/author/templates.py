@@ -99,20 +99,56 @@ import json, re
 go_pat = re.compile(r'^\s*--- (PASS|FAIL|SKIP):\s+(\S+)\s+\(')
 py_pat = re.compile(r'^(\S+)\s+(PASSED|FAILED|SKIPPED|ERROR)(?:\s|$)')
 py_status = {{'PASSED': 'PASS', 'FAILED': 'FAIL', 'SKIPPED': 'SKIP', 'ERROR': 'FAIL'}}
+rust_pat = re.compile(r'^test (\S+) \.\.\. (ok|FAILED|ignored)')
+gtest_pat = re.compile(r'^\[\s*(OK|FAILED|DISABLED)\s*\] (\S+)')
+gradle_pat = re.compile(r'^(\S+) > (\S+)\s+(PASSED|FAILED|SKIPPED)')
+gradle_status = {{'PASSED': 'PASS', 'FAILED': 'FAIL', 'SKIPPED': 'SKIP'}}
+zig_pat = re.compile(r'^Test \[\d+/\d+\] (?:\S+ )?"([^"]+)" \.\.\. (ok|FAILED)')
+jest_pat = re.compile(r'^\s+([✓✔✕✗○×])\s+(.+?)(?:\s+\(\d+\s*m?s\))?\s*$')
+jest_pass = frozenset(['✓', '✔'])
+jest_skip = frozenset(['○'])
 filt = re.compile({test_filter_pyrepr})
 passed = failed = skipped = 0
 details = []
 with open('/tmp/test.out') as f:
     for line in f:
+        name = status = None
         m = go_pat.match(line)
         if m:
             status, name = m.group(1), m.group(2)
-        else:
+        if name is None:
             m = py_pat.match(line)
-            if not m:
-                continue
-            name = m.group(1)
-            status = py_status[m.group(2)]
+            if m:
+                name = m.group(1)
+                status = py_status[m.group(2)]
+        if name is None:
+            m = rust_pat.match(line)
+            if m:
+                name = m.group(1)
+                rs = m.group(2)
+                status = 'PASS' if rs == 'ok' else ('SKIP' if rs == 'ignored' else 'FAIL')
+        if name is None:
+            m = gtest_pat.match(line)
+            if m:
+                gs, name = m.group(1), m.group(2)
+                status = 'PASS' if gs == 'OK' else ('SKIP' if gs == 'DISABLED' else 'FAIL')
+        if name is None:
+            m = gradle_pat.match(line)
+            if m:
+                name = m.group(1) + '.' + m.group(2)
+                status = gradle_status[m.group(3)]
+        if name is None:
+            m = zig_pat.match(line)
+            if m:
+                name = m.group(1)
+                status = 'PASS' if m.group(2) == 'ok' else 'FAIL'
+        if name is None:
+            m = jest_pat.match(line)
+            if m:
+                sym, name = m.group(1), m.group(2).strip()
+                status = 'PASS' if sym in jest_pass else ('SKIP' if sym in jest_skip else 'FAIL')
+        if name is None:
+            continue
         if not filt.search(name):
             continue
         if status == 'PASS':

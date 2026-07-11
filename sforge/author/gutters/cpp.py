@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import ClassVar
 
-import tree_sitter_typescript
+import tree_sitter_cpp
 from tree_sitter import Language, Node, Parser, Query, QueryCursor
 
 from sforge.author.errors import GutError
@@ -15,21 +15,14 @@ from sforge.author.gutters.base import (
 )
 
 
-_TS_LANG = Language(tree_sitter_typescript.language_typescript())
-_PARSER = Parser(_TS_LANG)
+_CPP_LANG = Language(tree_sitter_cpp.language())
+_PARSER = Parser(_CPP_LANG)
 
 _QUERY_SRC = """
-(function_declaration
-  name: (identifier) @name
-  body: (statement_block) @body) @func
-
-(method_definition
-  name: (property_identifier) @name
-  body: (statement_block) @body) @func
+(function_definition
+  body: (compound_statement) @body) @func
 """
-_QUERY = Query(_TS_LANG, _QUERY_SRC)
-
-_FUNC_NODE_TYPES = frozenset({"function_declaration", "method_definition"})
+_QUERY = Query(_CPP_LANG, _QUERY_SRC)
 
 
 @dataclass
@@ -40,14 +33,14 @@ class _FuncMatch:
     info: FunctionInfo
 
 
-class TypeScriptGutter(BaseGutter):
-    lang: ClassVar[str] = "typescript"
+class CppGutter(BaseGutter):
+    lang: ClassVar[str] = "cpp"
 
     def parse_functions(self, source: str) -> list[FunctionInfo]:
         return [m.info for m in self._match_functions(source)]
 
     def stub_body(self, fn: FunctionInfo) -> str:
-        return f'{{\n    throw new Error("{fn.name}: not implemented");\n}}'
+        return "{\n    __builtin_trap();\n}"
 
     def gut(self, source: str, spec: GutSpec) -> GutResult:
         matches = self._match_functions(source)
@@ -103,29 +96,25 @@ class TypeScriptGutter(BaseGutter):
         captures = cursor.captures(tree.root_node)
 
         func_nodes = captures.get("func", [])
-        name_nodes = captures.get("name", [])
         body_nodes = captures.get("body", [])
 
-        by_func: dict[int, dict[str, Node]] = {}
-        for f in func_nodes:
-            by_func[f.id] = {"func": f}
-        for n in name_nodes:
-            parent = _enclosing_func_or_method(n)
-            if parent is not None and parent.id in by_func:
-                by_func[parent.id]["name"] = n
+        body_by_func_id: dict[int, Node] = {}
         for b in body_nodes:
-            parent = _enclosing_func_or_method(b)
-            if parent is not None and parent.id in by_func:
-                by_func[parent.id]["body"] = b
+            parent = _enclosing_function(b)
+            if parent is not None:
+                body_by_func_id[parent.id] = b
 
         results: list[_FuncMatch] = []
-        for entry in by_func.values():
-            f = entry.get("func")
-            name = entry.get("name")
-            body = entry.get("body")
-            if f is None or name is None or body is None:
+        for f in func_nodes:
+            body = body_by_func_id.get(f.id)
+            if body is None:
                 continue
-            name_text = _text(name, source_bytes)
+            decl = f.child_by_field_name("declarator")
+            if decl is None:
+                continue
+            name_text = _extract_func_name(decl, source_bytes)
+            if name_text is None:
+                continue
             signature = source_bytes[f.start_byte : body.start_byte].decode(
                 "utf-8"
             ).rstrip()
@@ -137,8 +126,8 @@ class TypeScriptGutter(BaseGutter):
                 body_end_byte=body.end_byte,
                 body_loc=body_loc,
                 receiver=None,
-                params=_extract_params(f, source_bytes),
-                returns=_extract_returns(f, source_bytes),
+                params=_extract_params(decl, source_bytes),
+                returns=[],
             )
             results.append(
                 _FuncMatch(name=name_text, func_node=f, body_node=body, info=info)
@@ -151,35 +140,48 @@ def _text(node: Node, src: bytes) -> str:
     return src[node.start_byte : node.end_byte].decode("utf-8")
 
 
-def _enclosing_func_or_method(node: Node) -> Node | None:
+def _enclosing_function(node: Node) -> Node | None:
     cur = node.parent
     while cur is not None:
-        if cur.type in _FUNC_NODE_TYPES:
+        if cur.type == "function_definition":
             return cur
         cur = cur.parent
     return None
 
 
-def _extract_params(func_node: Node, src: bytes) -> list[str]:
-    params = func_node.child_by_field_name("parameters")
-    if params is None:
-        return []
-    out: list[str] = []
-    for child in params.named_children:
-        if child.type in (
-            "required_parameter",
-            "optional_parameter",
-            "rest_pattern",
-        ):
-            out.append(_text(child, src).strip())
-    return out
+def _extract_func_name(node: Node, src: bytes) -> str | None:
+    ntype = node.type
+    if ntype == "identifier":
+        return _text(node, src)
+    if ntype == "qualified_identifier":
+        name_child = node.child_by_field_name("name")
+        if name_child is not None:
+            return _extract_func_name(name_child, src)
+    if ntype in ("destructor_name", "operator_name"):
+        return _text(node, src)
+    for field in ("declarator", "name"):
+        child = node.child_by_field_name(field)
+        if child is not None:
+            result = _extract_func_name(child, src)
+            if result is not None:
+                return result
+    return None
 
 
-def _extract_returns(func_node: Node, src: bytes) -> list[str]:
-    ret = func_node.child_by_field_name("return_type")
-    if ret is None:
-        return []
-    return [_text(ret, src).strip()]
+def _extract_params(declarator: Node, src: bytes) -> list[str]:
+    if declarator.type == "function_declarator":
+        params = declarator.child_by_field_name("parameters")
+        if params is None:
+            return []
+        out: list[str] = []
+        for child in params.named_children:
+            if child.type in ("parameter_declaration", "variadic_parameter"):
+                out.append(_text(child, src).strip())
+        return out
+    child = declarator.child_by_field_name("declarator")
+    if child is not None:
+        return _extract_params(child, src)
+    return []
 
 
 def _iter_nodes(node: Node):

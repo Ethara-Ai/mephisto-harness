@@ -15,6 +15,11 @@ _LANG_EXTS: dict[str, tuple[str, ...]] = {
     "rust": (".rs",),
     "python": (".py",),
     "typescript": (".ts", ".tsx"),
+    "c": (".c", ".h"),
+    "cpp": (".cpp", ".cc", ".cxx", ".hpp", ".h"),
+    "java": (".java",),
+    "zig": (".zig",),
+    "lean": (".lean",),
 }
 
 _SKIP_DIRS = frozenset({"vendor", "target", "node_modules", ".git"})

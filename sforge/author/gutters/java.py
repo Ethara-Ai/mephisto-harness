@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import ClassVar
 
-import tree_sitter_typescript
+import tree_sitter_java
 from tree_sitter import Language, Node, Parser, Query, QueryCursor
 
 from sforge.author.errors import GutError
@@ -15,21 +15,21 @@ from sforge.author.gutters.base import (
 )
 
 
-_TS_LANG = Language(tree_sitter_typescript.language_typescript())
-_PARSER = Parser(_TS_LANG)
+_JAVA_LANG = Language(tree_sitter_java.language())
+_PARSER = Parser(_JAVA_LANG)
 
 _QUERY_SRC = """
-(function_declaration
+(method_declaration
   name: (identifier) @name
-  body: (statement_block) @body) @func
+  body: (block) @body) @func
 
-(method_definition
-  name: (property_identifier) @name
-  body: (statement_block) @body) @func
+(constructor_declaration
+  name: (identifier) @name
+  body: (constructor_body) @body) @func
 """
-_QUERY = Query(_TS_LANG, _QUERY_SRC)
+_QUERY = Query(_JAVA_LANG, _QUERY_SRC)
 
-_FUNC_NODE_TYPES = frozenset({"function_declaration", "method_definition"})
+_FUNC_NODE_TYPES = frozenset({"method_declaration", "constructor_declaration"})
 
 
 @dataclass
@@ -40,14 +40,17 @@ class _FuncMatch:
     info: FunctionInfo
 
 
-class TypeScriptGutter(BaseGutter):
-    lang: ClassVar[str] = "typescript"
+class JavaGutter(BaseGutter):
+    lang: ClassVar[str] = "java"
 
     def parse_functions(self, source: str) -> list[FunctionInfo]:
         return [m.info for m in self._match_functions(source)]
 
     def stub_body(self, fn: FunctionInfo) -> str:
-        return f'{{\n    throw new Error("{fn.name}: not implemented");\n}}'
+        return (
+            f'{{\n    throw new UnsupportedOperationException'
+            f'("{fn.name}: not implemented");\n}}'
+        )
 
     def gut(self, source: str, spec: GutSpec) -> GutResult:
         matches = self._match_functions(source)
@@ -110,11 +113,11 @@ class TypeScriptGutter(BaseGutter):
         for f in func_nodes:
             by_func[f.id] = {"func": f}
         for n in name_nodes:
-            parent = _enclosing_func_or_method(n)
+            parent = _enclosing_func_or_constructor(n)
             if parent is not None and parent.id in by_func:
                 by_func[parent.id]["name"] = n
         for b in body_nodes:
-            parent = _enclosing_func_or_method(b)
+            parent = _enclosing_func_or_constructor(b)
             if parent is not None and parent.id in by_func:
                 by_func[parent.id]["body"] = b
 
@@ -151,7 +154,7 @@ def _text(node: Node, src: bytes) -> str:
     return src[node.start_byte : node.end_byte].decode("utf-8")
 
 
-def _enclosing_func_or_method(node: Node) -> Node | None:
+def _enclosing_func_or_constructor(node: Node) -> Node | None:
     cur = node.parent
     while cur is not None:
         if cur.type in _FUNC_NODE_TYPES:
@@ -166,17 +169,13 @@ def _extract_params(func_node: Node, src: bytes) -> list[str]:
         return []
     out: list[str] = []
     for child in params.named_children:
-        if child.type in (
-            "required_parameter",
-            "optional_parameter",
-            "rest_pattern",
-        ):
+        if child.type in ("formal_parameter", "spread_parameter"):
             out.append(_text(child, src).strip())
     return out
 
 
 def _extract_returns(func_node: Node, src: bytes) -> list[str]:
-    ret = func_node.child_by_field_name("return_type")
+    ret = func_node.child_by_field_name("type")
     if ret is None:
         return []
     return [_text(ret, src).strip()]
