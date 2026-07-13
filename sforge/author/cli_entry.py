@@ -73,7 +73,10 @@ def _run(args: argparse.Namespace) -> int:
             original_bytes = src_path.read_bytes()
             originals[target.rel_path] = original_bytes
             source_text = original_bytes.decode("utf-8", errors="replace")
-            result = gutter.gut(source_text, GutSpec(target.rel_path, target.funcs))
+            if target.wipe:
+                result = gutter.wipe_file(source_text)
+            else:
+                result = gutter.gut(source_text, GutSpec(target.rel_path, target.funcs))
             gut_results.append(result)
             gutted_files[target.rel_path] = result.gutted_source.encode("utf-8")
 

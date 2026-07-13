@@ -1055,9 +1055,11 @@ def main():
     p_author.add_argument("--commit", required=True)
     p_author.add_argument("--base", required=True)
     p_author.add_argument("--lang", required=True,
-                          choices=["go", "python"])
-    p_author.add_argument("--gut", required=True, action="append",
-                          help="repeatable: 'path/to/file.go:Func1,Func2'")
+                          choices=["go", "python", "c", "cpp", "rust", "typescript", "java", "zig", "lean"])
+    p_author.add_argument("--gut", action="append", default=[],
+                          help="repeatable: 'path/to/file.go:Func1,Func2' or 'path/to/file.go:*' to gut all functions")
+    p_author.add_argument("--gut-whole", dest="gut_whole", action="append", default=[],
+                          help="repeatable: wipe entire file content down to a stub (provide relpath only)")
     p_author.add_argument("--cwd", required=True)
     p_author.add_argument("--test-cmd", dest="test_cmd", required=True)
     p_author.add_argument("--test-filter", dest="test_filter", required=True)

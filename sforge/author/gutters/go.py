@@ -70,24 +70,43 @@ class GoGutter(BaseGutter):
             "}"
         )
 
+    def _wipe_stub(self, source: str) -> str:
+        source_bytes = source.encode("utf-8")
+        tree = _PARSER.parse(source_bytes)
+        pkg_line = ""
+        for child in tree.root_node.children:
+            if child.type == "package_clause":
+                pkg_line = _text(child, source_bytes)
+                break
+        if pkg_line:
+            return (
+                f"{pkg_line}\n\n"
+                "// TODO(agent): implement this file from scratch. See TASK.md for the specification.\n"
+            )
+        return "// TODO(agent): implement this file from scratch. See TASK.md for the specification.\n"
+
     def gut(self, source: str, spec: GutSpec) -> GutResult:
         matches = self._match_functions(source)
-        by_name: dict[str, list[_FuncMatch]] = {}
-        for m in matches:
-            by_name.setdefault(m.name, []).append(m)
 
-        selected: list[_FuncMatch] = []
-        missing: list[str] = []
-        for fname in spec.funcs:
-            hits = by_name.get(fname)
-            if not hits:
-                missing.append(fname)
-                continue
-            selected.extend(hits)
-        if missing:
-            raise GutError(
-                f"functions not found in {spec.rel_path}: {', '.join(missing)}"
-            )
+        if not spec.funcs:
+            selected = list(matches)
+        else:
+            by_name: dict[str, list[_FuncMatch]] = {}
+            for m in matches:
+                by_name.setdefault(m.name, []).append(m)
+
+            selected = []
+            missing: list[str] = []
+            for fname in spec.funcs:
+                hits = by_name.get(fname)
+                if not hits:
+                    missing.append(fname)
+                    continue
+                selected.extend(hits)
+            if missing:
+                raise GutError(
+                    f"functions not found in {spec.rel_path}: {', '.join(missing)}"
+                )
 
         source_bytes = source.encode("utf-8")
         needs_errors = any(_needs_errors_import(m.info) for m in selected)

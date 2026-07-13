@@ -18,6 +18,7 @@ DEFAULT_MODEL_CUTOFF = date(2025, 4, 1)
 class GutTarget:
     rel_path: str
     funcs: list[str]
+    wipe: bool = False
 
 
 @dataclass
@@ -59,25 +60,36 @@ class AuthorConfig:
                 f"unknown lang: {self.lang!r} (must be one of {sorted(VALID_LANGS)})"
             )
         if not self.gut_targets:
-            raise AuthorError("at least one --gut target is required")
+            raise AuthorError("at least one --gut or --gut-whole target is required")
 
     @classmethod
     def from_namespace(cls, ns: argparse.Namespace) -> AuthorConfig:
         gut_raw = getattr(ns, "gut", None) or []
+        gut_whole_raw = getattr(ns, "gut_whole", None) or []
         gut_targets: list[GutTarget] = []
         for entry in gut_raw:
             if ":" not in entry:
-                raise AuthorError(
-                    f"invalid --gut spec: {entry!r} (expected 'relpath:func1,func2')"
-                )
+                rel_path = entry.strip()
+                if not rel_path:
+                    raise AuthorError(f"invalid --gut spec: {entry!r} (empty relpath)")
+                gut_targets.append(GutTarget(rel_path=rel_path, funcs=[]))
+                continue
             rel_path, funcs_str = entry.split(":", 1)
             rel_path = rel_path.strip()
-            funcs = [f.strip() for f in funcs_str.split(",") if f.strip()]
             if not rel_path:
                 raise AuthorError(f"invalid --gut spec: {entry!r} (missing relpath)")
+            if funcs_str.strip() == "*":
+                gut_targets.append(GutTarget(rel_path=rel_path, funcs=[]))
+                continue
+            funcs = [f.strip() for f in funcs_str.split(",") if f.strip()]
             if not funcs:
                 raise AuthorError(f"invalid --gut spec: {entry!r} (missing functions)")
             gut_targets.append(GutTarget(rel_path=rel_path, funcs=funcs))
+        for entry in gut_whole_raw:
+            rel_path = entry.strip()
+            if not rel_path:
+                raise AuthorError(f"invalid --gut-whole spec: {entry!r} (empty relpath)")
+            gut_targets.append(GutTarget(rel_path=rel_path, funcs=[], wipe=True))
 
         model_cutoff = getattr(ns, "model_cutoff", None)
         if isinstance(model_cutoff, str):

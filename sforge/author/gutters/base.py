@@ -41,3 +41,15 @@ class BaseGutter(ABC):
 
     @abstractmethod
     def stub_body(self, fn: FunctionInfo) -> str: ...
+
+    def _wipe_stub(self, source: str) -> str:
+        return "// TODO(agent): implement this file from scratch. See TASK.md for the specification.\n"
+
+    def wipe_file(self, source: str) -> GutResult:
+        total_loc = sum(1 for ln in source.splitlines() if ln.strip())
+        stub = self._wipe_stub(source)
+        return GutResult(
+            gutted_source=stub,
+            functions=[],
+            total_loc_gutted=total_loc,
+        )
