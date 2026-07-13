@@ -6,7 +6,7 @@ TASK_MD_TEMPLATE = """# Task: {name}
 **Task ID:** `{task_id}`
 **Category:** {category}
 **Language:** {lang}
-**Source:** {repo} @ `{commit}`
+{source_line}
 
 ## What to do
 
@@ -53,6 +53,7 @@ git -C /tmp/src checkout {commit}
 cp -a /tmp/src/. {cwd}
 rm -rf /tmp/src
 {prepared_files_bash}
+{workspace_extra_cmds}
 cat > {cwd}/TASK.md <<'TASKMD_EOF'
 {task_md}
 TASKMD_EOF

@@ -1069,8 +1069,18 @@ def main():
     p_author.add_argument("--tier", default="auto",
                           choices=["auto", "toy", "standard", "extreme"])
     p_author.add_argument("--min-tests", dest="min_tests", type=int, default=20)
-    p_author.add_argument("--allow-precutoff", dest="allow_precutoff",
-                          action="store_true", default=False)
+    p_author.add_argument(
+        "--allow-precutoff", dest="allow_precutoff",
+        action="store_true", default=False,
+        help=(
+            "Allow commits predating the model cutoff (2025-04-01). "
+            "HIGH CONTAMINATION RISK: prefer post-cutoff repos where possible. "
+            "For pre-cutoff use, choose niche/research repos (<500 GitHub stars) "
+            "and gut complex targets (>10 LOC each). "
+            "Avoid canonical benchmarks (PolyBench, NAS, SPEC) and standard algorithms "
+            "(GEMM, FFT, sort) — these are memorized regardless of commit date."
+        ),
+    )
     p_author.add_argument("--model-cutoff", dest="model_cutoff",
                           default="2025-04-01")
     p_author.add_argument("--no-calibrate", dest="no_calibrate",
@@ -1081,7 +1091,33 @@ def main():
     p_author.add_argument("--out-dir", dest="out_dir", default="tasks")
     p_author.add_argument("--dry-run", dest="dry_run", action="store_true", default=False)
     p_author.add_argument("--force", action="store_true", default=False)
-    p_author.add_argument("--extra-notes", dest="extra_notes", default="")
+    p_author.add_argument(
+        "--extra-notes", dest="extra_notes", default="",
+        help=(
+            "Auxiliary notes appended to TASK.md under '## Notes for the Agent'. "
+            "Use ONLY for API contract hints (argument order, in-place vs. return, param types). "
+            "NEVER include implementation formulas or algorithm details — "
+            "these constitute answer-key contamination and will be rejected at validation."
+        ),
+    )
+    p_author.add_argument(
+        "--hide-source", dest="hide_source",
+        action="store_true", default=False,
+        help=(
+            "Omit the repository URL and commit hash from TASK.md. "
+            "Use when the source repo is in model training data and the URL would "
+            "allow trivial recall of the original implementation."
+        ),
+    )
+    p_author.add_argument(
+        "--workspace-extra-cmds", dest="workspace_extra_cmds", default="",
+        help=(
+            "Extra shell commands injected into the work container setup, after gut files "
+            "are overlaid but before the initial git commit. Use to remove sibling "
+            "implementations that would let an agent trivially copy-paste a solution, "
+            "and to write a local smoke test the agent can run during development."
+        ),
+    )
 
     def _author_wrapper(args):
         from sforge.author.cli_entry import cmd_author_clone_gut

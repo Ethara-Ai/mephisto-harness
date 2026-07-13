@@ -13,6 +13,20 @@ VALID_LANGS = frozenset({"go", "rust", "python", "typescript", "c", "cpp", "java
 TASK_ID_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 DEFAULT_MODEL_CUTOFF = date(2025, 4, 1)
 
+_FORMULA_IN_NOTES_RE = re.compile(
+    r"""
+    `[^`\n]*          # open backtick, any non-backtick/newline chars
+    (?:
+        \w@\w         # compact matmul: A@B
+      | \s@\s         # spaced matmul:  A @ B
+      | [+\-*/]=[^=]  # augmented assignment: +=  -=  *=  /=
+      | [\w\]][ \t]*=[^=>]  # plain assignment to var/slice, not == or =>
+    )
+    [^`\n]*`          # rest of inline code snippet
+    """,
+    re.VERBOSE,
+)
+
 
 @dataclass
 class GutTarget:
@@ -49,6 +63,8 @@ class AuthorConfig:
     dry_run: bool = False
     force: bool = False
     extra_notes: str = ""
+    hide_source: bool = False
+    workspace_extra_cmds: str = ""
 
     def __post_init__(self) -> None:
         if not TASK_ID_RE.match(self.task_id):
@@ -61,6 +77,13 @@ class AuthorConfig:
             )
         if not self.gut_targets:
             raise AuthorError("at least one --gut or --gut-whole target is required")
+        if self.extra_notes and _FORMULA_IN_NOTES_RE.search(self.extra_notes):
+            raise AuthorError(
+                "extra_notes contains formula-like inline code (backtick expressions with "
+                "'@', '+=', '-=', '*=', '/='). Use extra_notes only for API contract hints "
+                "(argument order, in-place vs. return, param types) — not implementation "
+                "formulas. Move formula content to the test spec or cache_warm_cmd instead."
+            )
 
     @classmethod
     def from_namespace(cls, ns: argparse.Namespace) -> AuthorConfig:
@@ -127,4 +150,6 @@ class AuthorConfig:
             dry_run=getattr(ns, "dry_run", False),
             force=getattr(ns, "force", False),
             extra_notes=getattr(ns, "extra_notes", "") or "",
+            hide_source=getattr(ns, "hide_source", False),
+            workspace_extra_cmds=getattr(ns, "workspace_extra_cmds", "") or "",
         )

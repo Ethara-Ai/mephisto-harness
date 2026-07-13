@@ -48,28 +48,39 @@ def _build_prepared_files_bash(config: AuthorConfig, gut_results: list[GutResult
 
 def build_manifest(config: AuthorConfig, gut_results: list[GutResult]) -> dict:
     gut_files = _build_gut_files_bullets(config)
+    extra_notes_section = (
+        f"## Notes for the Agent\n\n{config.extra_notes.strip()}"
+        if config.extra_notes.strip()
+        else ""
+    )
+    source_line = (
+        f"**Source:** {config.repo} @ `{config.commit}`"
+        if not config.hide_source
+        else ""
+    )
     task_md = render(
         TASK_MD_TEMPLATE,
         task_id=config.task_id,
         name=config.name,
         category=config.category,
-        repo=config.repo,
-        commit=config.commit,
+        source_line=source_line,
         lang=config.lang,
         gut_files=gut_files,
         cwd=config.cwd,
         test_cmd=config.test_cmd,
         test_filter=config.test_filter,
-        extra_notes=config.extra_notes,
+        extra_notes=extra_notes_section,
     )
 
     prepared_files_bash = _build_prepared_files_bash(config, gut_results)
+    workspace_extra_cmds = config.workspace_extra_cmds or "true"
     setup_workspace = render(
         SETUP_WORKSPACE_SH_TEMPLATE,
         repo=config.repo,
         commit=config.commit,
         cwd=config.cwd,
         prepared_files_bash=prepared_files_bash,
+        workspace_extra_cmds=workspace_extra_cmds,
         task_md=task_md,
     )
 

@@ -81,6 +81,21 @@ def _run(args: argparse.Namespace) -> int:
             gutted_files[target.rel_path] = result.gutted_source.encode("utf-8")
 
         total_loc = sum(r.total_loc_gutted for r in gut_results)
+        if config.allow_precutoff and total_loc < 10:
+            print(
+                f"Warning: pre-cutoff commit with very short gut ({total_loc} LOC). "
+                "High contamination risk: short pre-cutoff functions are often reproducible "
+                "from model training memory. Consider gutting more complex targets (>10 LOC "
+                "each) or using a post-cutoff repo (drop --allow-precutoff).",
+                file=sys.stderr,
+            )
+        elif total_loc < 5:
+            print(
+                f"Warning: very short gut ({total_loc} LOC). "
+                "Functions this small risk trivial reconstruction from training memory. "
+                "Consider gutting more complex targets.",
+                file=sys.stderr,
+            )
         preliminary_tier = classify_tier(total_loc, 0)
 
         manifest = build_manifest(config, gut_results)
