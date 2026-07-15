@@ -1,0 +1,9 @@
+# NEVER commit credentials or secrets. The bridge reads them from your OS
+# credential store at runtime — nothing credential-shaped belongs in git.
+*.credentials.json
+*credentials*.json
+*oauth*.json
+.env
+.env.*
+__pycache__/
+*.pyc
