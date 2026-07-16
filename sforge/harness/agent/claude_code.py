@@ -26,10 +26,9 @@ from sforge.harness.backend import ContainerBackend, ContainerHandle
 
 
 class ClaudeCodeAgent(Agent):
-
     name = "claude-code"
     install_cmds = [
-        "sudo -E bash -c 'NODE_MIRROR=${SFORGE_NODEJS_MIRROR_URL:-https://nodejs.org/dist} && curl -fsSL $NODE_MIRROR/v20.18.0/node-v20.18.0-linux-x64.tar.xz | tar -xJ -C /usr/local --strip-components=1'",
+        "sudo -E bash -c 'NODE_MIRROR=${SFORGE_NODEJS_MIRROR_URL:-https://nodejs.org/dist} && case \"$(uname -m)\" in aarch64|arm64) NODE_ARCH=arm64;; *) NODE_ARCH=x64;; esac && curl -fsSL $NODE_MIRROR/v20.18.0/node-v20.18.0-linux-$NODE_ARCH.tar.xz | tar -xJ -C /usr/local --strip-components=1'",
         "sudo -E npm install -g @anthropic-ai/claude-code@2.1.159",
     ]
     run_cmd = (
@@ -66,12 +65,14 @@ class ClaudeCodeAgent(Agent):
         resume: bool = False,
     ) -> str:
         cmd = super().format_run_cmd(
-            prompt_path, model=model, cwd=cwd, internet=internet, resume=resume,
+            prompt_path,
+            model=model,
+            cwd=cwd,
+            internet=internet,
+            resume=resume,
         )
 
-        effective_model = (
-            model or self._config.agent_model or self.default_model
-        )
+        effective_model = model or self._config.agent_model or self.default_model
         if effective_model:
             cmd += f" --model {shlex.quote(effective_model)}"
 

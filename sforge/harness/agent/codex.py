@@ -25,12 +25,11 @@ from sforge.harness.backend import ContainerBackend, ContainerHandle
 
 
 class CodexAgent(Agent):
-
     name = "codex"
     install_cmds = [
-        "sudo -E bash -c 'NODE_MIRROR=${SFORGE_NODEJS_MIRROR_URL:-https://nodejs.org/dist} && curl -fsSL $NODE_MIRROR/v20.18.0/node-v20.18.0-linux-x64.tar.xz | tar -xJ -C /usr/local --strip-components=1'",
+        "sudo -E bash -c 'NODE_MIRROR=${SFORGE_NODEJS_MIRROR_URL:-https://nodejs.org/dist} && case \"$(uname -m)\" in aarch64|arm64) NODE_ARCH=arm64;; *) NODE_ARCH=x64;; esac && curl -fsSL $NODE_MIRROR/v20.18.0/node-v20.18.0-linux-$NODE_ARCH.tar.xz | tar -xJ -C /usr/local --strip-components=1'",
         "sudo -E npm install -g @openai/codex@0.130.0",
-        '''if [ -n "$OPENAI_BASE_URL" ]; then
+        """if [ -n "$OPENAI_BASE_URL" ]; then
     mkdir -p ~/.codex
     cat > ~/.codex/config.toml << EOF
 model_provider = "sforge-proxy"
@@ -42,9 +41,11 @@ name = "sforge-proxy"
 base_url = "${OPENAI_BASE_URL}"
 env_key = "OPENAI_API_KEY"
 EOF
-fi''',
+fi""",
     ]
-    run_cmd = 'codex exec --dangerously-bypass-approvals-and-sandbox "$(cat {prompt_file})"'
+    run_cmd = (
+        'codex exec --dangerously-bypass-approvals-and-sandbox "$(cat {prompt_file})"'
+    )
     resume_cmd = 'codex exec resume --last --dangerously-bypass-approvals-and-sandbox "Continue working."'
     api_key_env = "OPENAI_API_KEY"
     api_base_env = "OPENAI_BASE_URL"
@@ -67,12 +68,18 @@ fi''',
         resume: bool = False,
     ) -> str:
         cmd = super().format_run_cmd(
-            prompt_path, model=model, cwd=cwd, internet=internet, resume=resume,
+            prompt_path,
+            model=model,
+            cwd=cwd,
+            internet=internet,
+            resume=resume,
         )
 
         if not internet:
             cmd = cmd.replace(
-                "codex exec", 'codex exec -c web_search="disabled"', 1,
+                "codex exec",
+                'codex exec -c web_search="disabled"',
+                1,
             )
 
         return cmd
@@ -137,7 +144,9 @@ mv "$TMP" "$CONFIG"
 chown -R agent:agent /home/agent/.codex
 """
         result = backend.exec_run(
-            handle, ["/bin/bash", "-lc", enable_hooks_cmd], user="root",
+            handle,
+            ["/bin/bash", "-lc", enable_hooks_cmd],
+            user="root",
         )
         if result.exit_code != 0:
             raise RuntimeError(f"Failed to configure Codex hooks: {result.output}")
