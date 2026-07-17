@@ -295,6 +295,7 @@ def run_agent(
     handle = None
     net_isolation = None
     api_proxy = None
+    relay_name = None
     install_parts: list[str] = []
 
     try:
@@ -379,6 +380,7 @@ def run_agent(
         container_extra_hosts = {"host.docker.internal": "host-gateway"}
         container_cap_drop: list[str] = []
 
+        use_relay = False
         if not internet:
             from sforge.harness.network_isolation import (
                 check_iptables_permission,
@@ -395,25 +397,59 @@ def run_agent(
                     "http://host.docker.internal:9090 "
                     "and unset HTTP_PROXY/HTTPS_PROXY before running."
                 )
-            if not check_iptables_permission():
-                raise RuntimeError(
-                    "Network isolation requires sudo iptables access. "
-                    "Ensure passwordless sudo is configured for iptables."
+            use_relay = not check_iptables_permission()
+
+            if not use_relay:
+                # Linux host with iptables: original path, unchanged.
+                api_url = config.agent_api_base_url or agent.default_api_base_url
+                if api_url:
+                    api_host = urlparse(api_url).hostname or ""
+                    if api_host and api_host != "host.docker.internal" and not is_ip_address(api_host):
+                        resolved_ips = resolve_hostname(api_host, logger)
+                        if resolved_ips:
+                            container_extra_hosts[api_host] = resolved_ips[0]
+                container_cap_drop = ["NET_RAW"]
+                logger.info("Network isolation enabled: iptables preflight passed")
+            else:
+                # Docker Desktop (macOS): no host iptables. Use an internal
+                # Docker network + dual-homed relay instead (see isolated_network).
+                logger.info(
+                    "Network isolation: iptables unavailable, using Docker "
+                    "relay (macOS/Docker Desktop)"
                 )
-
-            api_url = config.agent_api_base_url or agent.default_api_base_url
-            if api_url:
-                api_host = urlparse(api_url).hostname or ""
-                if api_host and api_host != "host.docker.internal" and not is_ip_address(api_host):
-                    resolved_ips = resolve_hostname(api_host, logger)
-                    if resolved_ips:
-                        container_extra_hosts[api_host] = resolved_ips[0]
-
-            container_cap_drop = ["NET_RAW"]
-            logger.info("Network isolation enabled: preflight passed")
 
         cpu = config.work_cpu_limit if config.work_cpu_limit is not None else task_spec.work.cpu_limit
         mem = config.work_mem_limit if config.work_mem_limit is not None else task_spec.work.mem_limit
+
+        # macOS relay isolation: stand up the internal network + relay BEFORE
+        # the work container, and point the agent's API base + judge URL at the
+        # relay IP. The relay forwards :9090 (proxy/oauth bridge) and :8080
+        # (judge) to the host. Container installs on the bridge (with internet),
+        # then cuts over to the internal net after install.
+        if not internet and use_relay:
+            import docker as _docker
+
+            from sforge.harness.isolated_network import (
+                RELAY_IP,
+                ensure_isolated_network,
+                relay_base_urls,
+                start_relay,
+                wait_for_relay,
+            )
+
+            relay_client = _docker.from_env()
+            ensure_isolated_network(relay_client)
+            relay_name = start_relay(relay_client, run_id, logger)
+            wait_for_relay(relay_client, relay_name, logger)
+            relay_proxy_url, relay_judge_url = relay_base_urls()
+            judge_url = relay_judge_url
+            env["SFORGE_JUDGE_URL"] = relay_judge_url
+            if agent.api_base_env:
+                env[agent.api_base_env] = relay_proxy_url
+            logger.info(
+                "Isolated-mode (Docker Desktop) enabled: install with internet, "
+                "then cut over to internal net; endpoints via relay %s", RELAY_IP,
+            )
 
         handle = backend.create_container(
             task_spec.work_image_key,
@@ -483,8 +519,18 @@ def run_agent(
         elif not disable_stop_hook:
             agent.install_stop_hook(backend, handle, log_dir, logger)
 
+        # 4a2. macOS relay: cut the work container over to the internal net now
+        # that install (which needed internet) is done. Internet egress is
+        # severed here; the relay keeps proxy + judge reachable.
+        if not internet and use_relay:
+            import docker as _docker
+
+            from sforge.harness.isolated_network import cut_over_to_isolated
+
+            cut_over_to_isolated(_docker.from_env(), container_name, logger)
+
         # 4b. Apply network isolation (after install + tools, before agent)
-        if not internet:
+        if not internet and not use_relay:
             from sforge.harness.network_isolation import (
                 AllowedEndpoint,
                 build_allowed_endpoints,
@@ -867,6 +913,16 @@ def run_agent(
             except Exception as exc:
                 if logger:
                     logger.warning(f"Failed to cleanup network isolation: {exc}")
+        if relay_name is not None:
+            try:
+                import docker as _docker
+
+                from sforge.harness.isolated_network import cleanup_relay
+
+                cleanup_relay(_docker.from_env(), relay_name, logger)
+            except Exception as exc:
+                if logger:
+                    logger.warning(f"Failed to cleanup relay: {exc}")
         if threading.current_thread() is threading.main_thread():
             prev_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
             print("\nStopping container, please wait... (Ctrl+C disabled during cleanup)")
