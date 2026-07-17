@@ -18,6 +18,14 @@ from __future__ import annotations
 
 from typing import Any
 
+# Tolerance for score comparisons. Absorbs IEEE-754 rounding noise that can
+# differ across CPU architectures (e.g. math.log on amd64 vs arm64) so the
+# best-submission choice is arch-deterministic. A score gap larger than this
+# is a REAL difference; if two arches disagree by more than epsilon, the
+# task's own grading logic is non-deterministic and must be fixed there, not
+# here. Not configurable on purpose.
+_SCORE_EPSILON = 1e-9
+
 
 def select_best(
     entries: list[dict[str, Any]],
@@ -45,7 +53,9 @@ def _completed_submissions(entries: list[dict]) -> list[dict]:
 def _is_better_score(new: float, old: float | None, direction: str) -> bool:
     if old is None:
         return True
-    return new < old if direction == "minimize" else new > old
+    if direction == "minimize":
+        return new < old - _SCORE_EPSILON
+    return new > old + _SCORE_EPSILON
 
 
 def _pass_rate_first(entries: list[dict], score_direction: str) -> dict:

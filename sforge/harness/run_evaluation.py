@@ -167,6 +167,7 @@ def judge_submission(
             cpu_limit=cpu,
             mem_limit=mem,
             user=DOCKER_USER,
+            platform=task_spec.platform,
         )
         backend.start_container(handle)
         logger.info(f"Judge container started: {handle.id}")

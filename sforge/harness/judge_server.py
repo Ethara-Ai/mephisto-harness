@@ -540,6 +540,7 @@ class JudgeState:
             environment=env,
             cpu_limit=cpu,
             mem_limit=mem,
+            platform=task_spec.platform,
         )
         backend.start_container(handle)
         logger.info("Game container started: %s (%s)", container_name, handle.id[:12])

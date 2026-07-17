@@ -201,6 +201,7 @@ class K8sBackend(ContainerBackend):
         mem_limit: str | None = None,
         user: str | None = None,
         annotations: dict[str, str] | None = None,
+        platform: str | None = None,
     ) -> K8sPodHandle:
         full_image = self._resolve_image(image)
         k8s_name = _sanitize_k8s_name(name)
@@ -278,8 +279,12 @@ class K8sBackend(ContainerBackend):
         }
         if pod_annotations:
             pod["metadata"]["annotations"] = pod_annotations
-        if self._node_selector:
-            pod["spec"]["nodeSelector"] = self._node_selector
+        node_selector = dict(self._node_selector) if self._node_selector else {}
+        arch = _arch_from_platform(platform)
+        if arch:
+            node_selector["kubernetes.io/arch"] = arch
+        if node_selector:
+            pod["spec"]["nodeSelector"] = node_selector
         if host_aliases:
             pod["spec"]["hostAliases"] = host_aliases
 
@@ -726,6 +731,18 @@ class K8sBackend(ContainerBackend):
         if isinstance(handle, K8sPodHandle):
             return handle
         raise TypeError(f"Expected K8sPodHandle, got {type(handle).__name__}")
+
+
+def _arch_from_platform(platform: str | None) -> str | None:
+    """Map a docker platform string to a k8s node arch label value.
+
+    'linux/amd64' -> 'amd64', 'linux/arm64' -> 'arm64'. Used to pin a pod to
+    a node of the task's architecture so grading is arch-deterministic.
+    """
+    if not platform:
+        return None
+    parts = platform.split("/")
+    return parts[1] if len(parts) >= 2 else None
 
 
 def _sanitize_k8s_name(name: str) -> str:

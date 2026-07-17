@@ -85,6 +85,7 @@ class ContainerBackend(abc.ABC):
         mem_limit: str | None = None,
         user: str | None = None,
         annotations: dict[str, str] | None = None,
+        platform: str | None = None,
     ) -> ContainerHandle:
         ...
 

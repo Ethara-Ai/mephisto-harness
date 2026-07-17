@@ -117,8 +117,11 @@ class DockerBackend(ContainerBackend):
         mem_limit: str | None = None,
         user: str | None = None,
         annotations: dict[str, str] | None = None,
+        platform: str | None = None,
     ) -> DockerContainerHandle:
         kwargs: dict = {}
+        if platform:
+            kwargs["platform"] = platform
         if cpu_limit is not None:
             kwargs["nano_cpus"] = int(cpu_limit * 1e9)
         if mem_limit is not None:

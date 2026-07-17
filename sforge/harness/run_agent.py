@@ -423,6 +423,7 @@ def run_agent(
             cap_drop=container_cap_drop or None,
             cpu_limit=cpu,
             mem_limit=mem,
+            platform=task_spec.platform,
         )
         backend.start_container(handle)
         logger.info(f"Container started: {container_name} (judge_url={judge_url})")
