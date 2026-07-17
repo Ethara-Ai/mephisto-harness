@@ -39,6 +39,9 @@ from sforge.harness.dockerfiles import (
     get_dockerfile_base,
     get_dockerfile_work,
     get_dockerfile_judge,
+    get_dockerfile_base_multiarch,
+    get_dockerfile_work_multiarch,
+    get_dockerfile_judge_multiarch,
 )
 from sforge.harness.task_spec import TaskSpec
 
@@ -294,6 +297,129 @@ def _push_image(
     except (docker.errors.ImageNotFound, docker.errors.APIError) as e:
         print(f"[registry] Push failed: {e}")
         return False
+
+
+def _buildx_builder_available() -> bool:
+    """True if a buildx builder that can do multi-platform push exists.
+
+    The default ``docker`` driver cannot push a manifest list; only the
+    ``docker-container`` (or ``kubernetes``/``remote``) driver can. We check
+    for at least one non-default builder that is running.
+    """
+    try:
+        out = subprocess.run(
+            ["docker", "buildx", "inspect"],
+            capture_output=True, text=True, timeout=30,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    if out.returncode != 0:
+        return False
+    driver_ok = False
+    for line in out.stdout.splitlines():
+        low = line.lower()
+        if low.startswith("driver:"):
+            driver_ok = "docker-container" in low or "kubernetes" in low or "remote" in low
+    return driver_ok
+
+
+def _verify_manifest_list(remote_ref: str, platforms: list[str]) -> bool:
+    """Frankenstein guard: assert the pushed manifest list contains every
+    requested platform, each as a distinct native entry.
+    """
+    try:
+        out = subprocess.run(
+            ["docker", "manifest", "inspect", remote_ref],
+            capture_output=True, text=True, timeout=60,
+        )
+    except (OSError, subprocess.SubprocessError) as e:
+        print(f"[registry] manifest inspect failed: {e}")
+        return False
+    if out.returncode != 0:
+        print(f"[registry] manifest inspect error: {out.stderr.strip()}")
+        return False
+    want = set()
+    for p in platforms:
+        os_arch = p.split("/")
+        if len(os_arch) >= 2:
+            want.add((os_arch[0], os_arch[1]))
+    found = set()
+    try:
+        import json as _json
+        data = _json.loads(out.stdout)
+        for m in data.get("manifests", []):
+            plat = m.get("platform", {})
+            os_ = plat.get("os")
+            arch = plat.get("architecture")
+            if os_ and arch and arch != "unknown":
+                found.add((os_, arch))
+    except (ValueError, KeyError) as e:
+        print(f"[registry] manifest parse error: {e}")
+        return False
+    missing = want - found
+    if missing:
+        print(f"[registry] MANIFEST INCOMPLETE for {remote_ref}: missing {sorted(missing)} (found {sorted(found)})")
+        return False
+    print(f"[registry] manifest verified: {sorted(found)}")
+    return True
+
+
+def _buildx_push(
+    remote_ref: str,
+    build_dir: Path,
+    dockerfile: str,
+    platforms: list[str],
+    setup_scripts: dict[str, str],
+    buildargs: dict[str, str] | None = None,
+    secrets: dict[str, str] | None = None,
+    logger: logging.Logger | None = None,
+) -> bool:
+    """Build a genuine multi-arch image and push it as a manifest list.
+
+    Uses ``docker buildx build --platform <a,b> --push``. Multi-arch images
+    cannot be loaded into the local store, so build and push are one atomic
+    buildx operation. Returns True on success.
+    """
+    secret_files: list[Path] = []
+    try:
+        build_dir.mkdir(parents=True, exist_ok=True)
+        for name, content in setup_scripts.items():
+            (build_dir / name).write_text(content)
+        (build_dir / "Dockerfile").write_text(dockerfile)
+
+        cmd = [
+            "docker", "buildx", "build",
+            "--platform", ",".join(platforms),
+            "--tag", remote_ref,
+            "--push",
+        ]
+        for sid, value in (secrets or {}).items():
+            secret_path = build_dir / f".secret_{sid}"
+            secret_path.write_text(value)
+            secret_files.append(secret_path)
+            cmd += ["--secret", f"id={sid},src={secret_path}"]
+        for k, v in (buildargs or {}).items():
+            cmd += ["--build-arg", f"{k}={v}"]
+        cmd.append(str(build_dir))
+
+        print(f"[registry] buildx multi-arch push {remote_ref} ({','.join(platforms)}) ...")
+        env = {**os.environ, "DOCKER_BUILDKIT": "1"}
+        proc = subprocess.Popen(
+            cmd, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+        )
+        for line in proc.stdout:
+            stripped = ansi_escape(line.rstrip())
+            if logger:
+                logger.info(stripped)
+        proc.wait()
+        if proc.returncode != 0:
+            print(f"[registry] buildx push failed (exit {proc.returncode})")
+            return False
+    finally:
+        for sp in secret_files:
+            sp.unlink(missing_ok=True)
+
+    return _verify_manifest_list(remote_ref, platforms)
 
 
 def build_base_image(
@@ -575,4 +701,120 @@ def push_all_images(
         )
         work_ok = work_fut.result()
         judge_ok = judge_fut.result()
+    return base_ok, work_ok, judge_ok
+
+
+def push_all_images_multiarch(
+    task_spec: TaskSpec,
+    config: SForgeConfig,
+    registry: str,
+    client: docker.DockerClient,
+) -> tuple[bool, bool, bool]:
+    """Build + push base, work, judge as genuine multi-arch manifest lists.
+
+    Unlike push_all_images (which pushes an already-built single-arch local
+    image), this REBUILDS each image for every requested platform via buildx
+    and pushes a manifest list. Order matters: base must land first because
+    work/judge FROM it. Returns (base_ok, work_ok, judge_ok).
+    """
+    platforms = task_spec.effective_publish_platforms
+
+    # Multi-arch REBUILDS from setup_cmds; a pre-built image_tag task has no
+    # recipe to rebuild from, so it cannot be published multi-arch this way.
+    if not task_spec.work_needs_build or not task_spec.judge_needs_build:
+        print(
+            f"[registry] ERROR: task '{task_spec.task_id}' uses a pre-built image_tag "
+            "(no setup_cmds), so it cannot be rebuilt as multi-arch. Multi-arch push "
+            "requires setup_cmds-driven work and judge images."
+        )
+        return False, False, False
+
+    if not _buildx_builder_available():
+        print(
+            "[registry] ERROR: multi-arch push needs a buildx 'docker-container' "
+            "builder. Create one with:\n"
+            "  docker buildx create --use --driver docker-container\n"
+            "and ensure QEMU is registered:\n"
+            "  docker run --privileged --rm tonistiigi/binfmt --install all"
+        )
+        return False, False, False
+
+    if task_spec.base_image_spec is None:
+        print(f"[registry] ERROR: task '{task_spec.task_id}' has no base_image_spec; cannot build base multi-arch")
+        return False, False, False
+
+    env_directives = get_env_directives(config)
+    secrets = get_build_secrets(config)
+    buildargs = get_build_args(config)
+    base_image_spec = task_spec.base_image_spec
+
+    # 1. Base (multi-arch), guarded by the same per-key lock as single-arch.
+    base_key = task_spec.base_image
+    with _base_push_locks_guard:
+        if base_key not in _base_push_locks:
+            _base_push_locks[base_key] = threading.Lock()
+        lock = _base_push_locks[base_key]
+
+    base_ref = task_spec.base_remote_ref(registry)
+    with lock:
+        if base_ref in _pushed_base_refs:
+            base_ok = True
+        else:
+            base_df = get_dockerfile_base_multiarch(
+                base_image_spec, env_directives,
+                apt_mirror_url=config.apt_mirror_url,
+            )
+            base_dir = BASE_IMAGE_BUILD_DIR / (base_ref.replace("/", "__").replace(":", "__") + ".multiarch")
+            base_ok = _buildx_push(
+                remote_ref=base_ref,
+                build_dir=base_dir,
+                dockerfile=base_df,
+                platforms=platforms,
+                setup_scripts={},
+                buildargs=buildargs,
+            )
+            if base_ok:
+                _pushed_base_refs.add(base_ref)
+
+    if not base_ok:
+        print("[registry] base multi-arch push failed; skipping work/judge")
+        return False, False, False
+
+    # 2. Work + judge (multi-arch). FROM the (now multi-arch) base by remote ref.
+    work_df = get_dockerfile_work_multiarch(
+        base_image=base_ref,
+        cwd=task_spec.cwd,
+        env_directives=env_directives,
+        secrets=secrets or None,
+    )
+    work_ref = task_spec.multiarch_work_remote_ref(registry)
+    work_dir = WORK_IMAGE_BUILD_DIR / (work_ref.replace("/", "__").replace(":", "__") + ".multiarch")
+    work_ok = _buildx_push(
+        remote_ref=work_ref,
+        build_dir=work_dir,
+        dockerfile=work_df,
+        platforms=platforms,
+        setup_scripts={"setup_workspace.sh": task_spec.setup_workspace_script},
+        buildargs=buildargs,
+        secrets=secrets or None,
+    )
+
+    judge_df = get_dockerfile_judge_multiarch(
+        base_image=base_ref,
+        cwd=task_spec.cwd,
+        env_directives=env_directives,
+        secrets=secrets or None,
+    )
+    judge_ref = task_spec.multiarch_judge_remote_ref(registry)
+    judge_dir = JUDGE_IMAGE_BUILD_DIR / (judge_ref.replace("/", "__").replace(":", "__") + ".multiarch")
+    judge_ok = _buildx_push(
+        remote_ref=judge_ref,
+        build_dir=judge_dir,
+        dockerfile=judge_df,
+        platforms=platforms,
+        setup_scripts={"setup_judge.sh": task_spec.setup_judge_script},
+        buildargs=buildargs,
+        secrets=secrets or None,
+    )
+
     return base_ok, work_ok, judge_ok

@@ -36,6 +36,7 @@ from sforge.harness.docker_build import (
     build_judge_image,
     pull_all_images,
     push_all_images,
+    push_all_images_multiarch,
 )
 from sforge.harness.docker_utils import cleanup_container
 from sforge.harness.run_evaluation import judge_submission
@@ -195,6 +196,18 @@ def cmd_push(args):
     task_specs = _resolve_tasks(args, config)
     client = docker.from_env()
 
+    # --platforms overrides each task's publish_platforms for this push.
+    cli_platforms = getattr(args, "platforms", None)
+    if cli_platforms:
+        override = [p.strip() for p in cli_platforms.split(",") if p.strip()]
+        _valid = {"linux/amd64", "linux/arm64"}
+        _bad = [p for p in override if p not in _valid]
+        if _bad:
+            print(f"Error: --platforms has invalid value(s) {_bad}; allowed: {sorted(_valid)}")
+            sys.exit(1)
+        for ts in task_specs:
+            ts.publish_platforms = override
+
     if len(task_specs) == 1:
         task_spec = task_specs[0]
         print(f"Pushing images for task: {task_spec.task_id}")
@@ -202,9 +215,15 @@ def cmd_push(args):
         print(f"  Base hash:  {task_spec.base_image_hash[:12]}")
         print(f"  Work hash:  {task_spec.work_image_hash[:12]}")
         print(f"  Judge hash: {task_spec.judge_image_hash[:12]}")
-        base_ok, work_ok, judge_ok = push_all_images(
-            task_spec, config.registry, client
-        )
+        if task_spec.is_multiarch_publish:
+            print(f"  Platforms: {', '.join(task_spec.effective_publish_platforms)} (multi-arch)")
+            base_ok, work_ok, judge_ok = push_all_images_multiarch(
+                task_spec, config, config.registry, client
+            )
+        else:
+            base_ok, work_ok, judge_ok = push_all_images(
+                task_spec, config.registry, client
+            )
         print(f"  Base:  {'OK' if base_ok else 'FAILED'}")
         print(f"  Work:  {'OK' if work_ok else 'FAILED'}")
         print(f"  Judge: {'OK' if judge_ok else 'FAILED'}")
@@ -213,9 +232,14 @@ def cmd_push(args):
         print(f"  Registry: {config.registry}")
 
         def _push_one(ts: TaskSpec):
-            base_ok, work_ok, judge_ok = push_all_images(
-                ts, config.registry, client
-            )
+            if ts.is_multiarch_publish:
+                base_ok, work_ok, judge_ok = push_all_images_multiarch(
+                    ts, config, config.registry, client
+                )
+            else:
+                base_ok, work_ok, judge_ok = push_all_images(
+                    ts, config.registry, client
+                )
             return ts.task_id, base_ok, work_ok, judge_ok
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=len(task_specs)) as ex:
@@ -927,6 +951,11 @@ def main():
                               help="Push images for all tasks")
     p_push.add_argument("--registry", dest="registry", default=None,
                         help="Remote container registry (overrides SFORGE_REGISTRY)")
+    p_push.add_argument("--platforms", dest="platforms", default=None,
+                        help="Comma-separated platforms for a multi-arch manifest-list push "
+                             "(e.g. 'linux/amd64,linux/arm64'). Overrides the task's "
+                             "publish_platforms. Requires a buildx docker-container builder. "
+                             "Omit for the default single-arch push.")
     p_push.set_defaults(func=cmd_push)
 
     # run

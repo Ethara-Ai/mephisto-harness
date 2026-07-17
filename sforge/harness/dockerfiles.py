@@ -160,3 +160,46 @@ def get_dockerfile_judge(
         f"chmod +x /tmp/setup_judge.sh && /bin/bash /tmp/setup_judge.sh\n"
         f"WORKDIR {cwd}\n"
     )
+
+
+# --- Multi-arch variants: NO `--platform` pin on FROM so buildx's own
+# --- --platform flag drives a genuinely-native build per target arch. ---
+
+
+def get_dockerfile_base_multiarch(
+    base_image_spec: dict,
+    env_directives: str = "",
+    apt_mirror_url: str | None = None,
+) -> str:
+    """Base Dockerfile for multi-arch buildx (no FROM --platform pin)."""
+    single = get_dockerfile_base(
+        base_image_spec, "PLACEHOLDER_PLATFORM", env_directives,
+        apt_mirror_url=apt_mirror_url,
+    )
+    return single.replace("FROM --platform=PLACEHOLDER_PLATFORM ", "FROM ", 1)
+
+
+def get_dockerfile_work_multiarch(
+    base_image: str,
+    cwd: str,
+    env_directives: str = "",
+    secrets: dict[str, str] | None = None,
+) -> str:
+    """Work Dockerfile for multi-arch buildx (no FROM --platform pin)."""
+    single = get_dockerfile_work(
+        "PLACEHOLDER_PLATFORM", base_image, cwd, env_directives, secrets,
+    )
+    return single.replace("FROM --platform=PLACEHOLDER_PLATFORM ", "FROM ", 1)
+
+
+def get_dockerfile_judge_multiarch(
+    base_image: str,
+    cwd: str,
+    env_directives: str = "",
+    secrets: dict[str, str] | None = None,
+) -> str:
+    """Judge Dockerfile for multi-arch buildx (no FROM --platform pin)."""
+    single = get_dockerfile_judge(
+        "PLACEHOLDER_PLATFORM", base_image, cwd, env_directives, secrets,
+    )
+    return single.replace("FROM --platform=PLACEHOLDER_PLATFORM ", "FROM ", 1)

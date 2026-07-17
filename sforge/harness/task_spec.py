@@ -73,6 +73,7 @@ class TaskSpec:
     base_image_spec: dict | None = None
     game_mode: bool = False
     internet: bool = True
+    publish_platforms: list[str] | None = None
 
     @property
     def base_image_tag(self) -> str:
@@ -120,6 +121,50 @@ class TaskSpec:
             "setup_cmds": self.judge.setup_cmds,
         }, sort_keys=True)
         return hashlib.sha256(data.encode()).hexdigest()
+
+    @property
+    def effective_publish_platforms(self) -> list[str]:
+        """Platforms to publish as a multi-arch manifest list.
+
+        Defaults to [self.platform] (single-arch, unchanged behavior) when
+        publish_platforms is unset, so existing tasks keep their current push.
+        """
+        if self.publish_platforms:
+            return list(self.publish_platforms)
+        return [self.platform]
+
+    @property
+    def is_multiarch_publish(self) -> bool:
+        return len(self.effective_publish_platforms) > 1
+
+    def _multiarch_hash(self, setup_cmds: list[str]) -> str:
+        """Content hash for a multi-arch image: identical across arches, so
+        platform is deliberately excluded and the single tag points at the
+        manifest list holding every arch.
+        """
+        data = json.dumps({
+            "base_hash": self.base_image_hash,
+            "cwd": self.cwd,
+            "setup_cmds": setup_cmds,
+            "publish_platforms": sorted(self.effective_publish_platforms),
+        }, sort_keys=True)
+        return hashlib.sha256(data.encode()).hexdigest()
+
+    @property
+    def multiarch_work_image_key(self) -> str:
+        tag = self.work.image_tag if self.work.image_tag else self._multiarch_hash(self.work.setup_cmds or [])[:12]
+        return f"{self.benchmark_name}.work.{self.task_id}:{tag}"
+
+    @property
+    def multiarch_judge_image_key(self) -> str:
+        tag = self.judge.image_tag if self.judge.image_tag else self._multiarch_hash(self.judge.setup_cmds or [])[:12]
+        return f"{self.benchmark_name}.judge.{self.task_id}:{tag}"
+
+    def multiarch_work_remote_ref(self, registry: str) -> str:
+        return f"{registry}/{self.multiarch_work_image_key}"
+
+    def multiarch_judge_remote_ref(self, registry: str) -> str:
+        return f"{registry}/{self.multiarch_judge_image_key}"
 
     @property
     def work_needs_build(self) -> bool:
@@ -246,6 +291,7 @@ def make_task_spec(task_path: Path, benchmark: BenchmarkMeta) -> TaskSpec:
         base_image_spec=base_image_spec,
         game_mode=data.get("game_mode", False),
         internet=data.get("internet", True),
+        publish_platforms=data.get("publish_platforms"),
     )
 
     _validate_image_tag_consistency(
