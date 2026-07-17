@@ -109,7 +109,7 @@ def build_manifest(config: AuthorConfig, gut_results: list[GutResult]) -> dict:
         "name": config.name,
         "category": config.category,
         "base_image": config.base,
-        "platform": "linux/amd64",
+        "platform": config.platform,
         "internet": config.internet,
         "cwd": config.cwd,
         "submit_paths": [t.rel_path for t in config.gut_targets],

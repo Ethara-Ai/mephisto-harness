@@ -1054,6 +1054,8 @@ def main():
     p_author.add_argument("--repo", required=True)
     p_author.add_argument("--commit", required=True)
     p_author.add_argument("--base", required=True)
+    p_author.add_argument("--platform", default="linux/amd64",
+                          choices=["linux/amd64", "linux/arm64"])
     p_author.add_argument("--lang", required=True,
                           choices=["go", "python", "c", "cpp", "rust", "typescript", "java", "zig", "lean"])
     p_author.add_argument("--gut", action="append", default=[],

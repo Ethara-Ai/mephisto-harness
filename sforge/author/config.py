@@ -10,6 +10,8 @@ from sforge.author.errors import AuthorError
 
 
 VALID_LANGS = frozenset({"go", "rust", "python", "typescript", "c", "cpp", "java", "zig", "lean"})
+VALID_PLATFORMS = frozenset({"linux/amd64", "linux/arm64"})
+DEFAULT_PLATFORM = "linux/amd64"
 TASK_ID_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 DEFAULT_MODEL_CUTOFF = date(2025, 4, 1)
 
@@ -48,6 +50,7 @@ class AuthorConfig:
     cwd: str
     test_cmd: str
     test_filter: str
+    platform: str = DEFAULT_PLATFORM
     build_cmd: str = ""
     cache_warm_cmd: str = ""
     internet: bool = False
@@ -74,6 +77,10 @@ class AuthorConfig:
         if self.lang not in VALID_LANGS:
             raise AuthorError(
                 f"unknown lang: {self.lang!r} (must be one of {sorted(VALID_LANGS)})"
+            )
+        if self.platform not in VALID_PLATFORMS:
+            raise AuthorError(
+                f"unknown platform: {self.platform!r} (must be one of {sorted(VALID_PLATFORMS)})"
             )
         if not self.gut_targets:
             raise AuthorError("at least one --gut or --gut-whole target is required")
@@ -135,6 +142,7 @@ class AuthorConfig:
             cwd=ns.cwd,
             test_cmd=ns.test_cmd,
             test_filter=ns.test_filter,
+            platform=getattr(ns, "platform", None) or DEFAULT_PLATFORM,
             build_cmd=getattr(ns, "build_cmd", "") or "",
             cache_warm_cmd=getattr(ns, "cache_warm_cmd", "") or "",
             internet=getattr(ns, "internet", False),
