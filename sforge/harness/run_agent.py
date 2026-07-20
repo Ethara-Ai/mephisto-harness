@@ -135,6 +135,7 @@ def _build_agent_env(
 
     return env
 
+
 # ---------------------------------------------------------------------------
 # Container setup helpers
 # ---------------------------------------------------------------------------
@@ -190,6 +191,62 @@ def _extract_archive_from_container(
     return archive
 
 
+def _text_has_cap_signal(text: str) -> bool:
+    """Cheap check: does the agent output tail look like a rate-limit / cap?
+
+    Used ONLY as a fallback when the bridge's /healthz probe is unreachable,
+    so we can still choose a conservative pause over a hard failure. Kept
+    deliberately simple (substring match on unambiguous slugs/status).
+    """
+    if not text:
+        return False
+    low = text.lower()
+    return (
+        "rate_limit_error" in low
+        or "too many requests" in low
+        or "resource_exhausted" in low
+        or "accounts exhausted" in low
+        or "credentials_unavailable" in low
+        or " 429" in low
+    )
+
+
+def _bridge_pool_status(api_base_url, logger):
+    """Query the OAuth bridge /healthz for (reset_at, pool_size).
+
+    ``reset_at`` is the Unix time the soonest exhausted account becomes
+    available (None if any account is available now or there is no pool).
+    ``pool_size`` is the number of pooled accounts (0 for single-account /
+    no bridge). Best-effort: any error yields (None, 0).
+    """
+    if not api_base_url:
+        return (None, 0)
+    base = api_base_url.rstrip("/")
+    if base.endswith("/v1"):
+        base = base[: -len("/v1")]
+    try:
+        resp = requests.get(f"{base}/healthz", timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+    except Exception as exc:  # noqa: BLE001 — best-effort probe
+        if logger:
+            logger.debug(f"bridge /healthz probe failed: {exc}")
+        return (None, 0)
+    reset = data.get("next_reset_at_unix")
+    reset_at = float(reset) if isinstance(reset, (int, float)) and reset > 0 else None
+    accounts = data.get("accounts") or []
+    pool_size = len(accounts) if isinstance(accounts, list) else 0
+    return (reset_at, pool_size)
+
+
+# --- Resume / recovery tuning (module-level: config, not per-run state) ---
+MIN_RUNTIME_FOR_RESUME = 1      # a segment shorter than this is a "quick crash"
+MAX_RESUMES = 100              # hard global ceiling on agent resumes
+MAX_POOL_PAUSE = 6 * 3600      # never wait more than 6h for one pool reset
+MIN_POOL_PAUSES = 3            # min pool-pause cycles (scales up to pool size)
+BRIDGE_DOWN_PAUSE = 300        # conservative sleep when the bridge is unreachable
+
+
 def _auto_eval_loop(
     backend: ContainerBackend,
     handle: ContainerHandle,
@@ -227,7 +284,9 @@ def _auto_eval_loop(
             data = resp.json()
             ts = time.strftime("%Y-%m-%dT%H:%M:%S")
             with open(ticks_log, "a") as f:
-                f.write(f"[{ts}] submitted {len(archive)} bytes -> {data.get('submission_id', '?')} round={data.get('round_id', '?')}\n")
+                f.write(
+                    f"[{ts}] submitted {len(archive)} bytes -> {data.get('submission_id', '?')} round={data.get('round_id', '?')}\n"
+                )
         except Exception as e:
             ts = time.strftime("%Y-%m-%dT%H:%M:%S")
             try:
@@ -302,6 +361,7 @@ def run_agent(
         # 0. Clean up stale iptables chains from previous runs that were killed
         if backend.backend_name == "docker":
             from sforge.harness.network_isolation import cleanup_stale_chains
+
             cleanup_stale_chains(logger)
 
         # 1. Check images exist (must run `sforge build` first)
@@ -313,7 +373,11 @@ def run_agent(
         logger.info("Images ready")
 
         # 1b. Register session with judge server
-        reg_body: dict = {"task_id": task_spec.task_id, "run_id": run_id, "admin_secret": ADMIN_SECRET}
+        reg_body: dict = {
+            "task_id": task_spec.task_id,
+            "run_id": run_id,
+            "admin_secret": ADMIN_SECRET,
+        }
         if config.judge_cpu_limit is not None:
             reg_body["judge_cpu_limit"] = config.judge_cpu_limit
         if config.judge_mem_limit is not None:
@@ -339,11 +403,20 @@ def run_agent(
                 )
                 reg_resp.raise_for_status()
                 break
-            except (requests.ConnectionError, requests.Timeout, requests.HTTPError) as exc:
+            except (
+                requests.ConnectionError,
+                requests.Timeout,
+                requests.HTTPError,
+            ) as exc:
                 if _reg_attempt == 5:
                     raise
                 wait = 2 * _reg_attempt
-                logger.warning("Register attempt %d/5 failed (%s), retrying in %ds...", _reg_attempt, exc, wait)
+                logger.warning(
+                    "Register attempt %d/5 failed (%s), retrying in %ds...",
+                    _reg_attempt,
+                    exc,
+                    wait,
+                )
                 time.sleep(wait)
         session_token = reg_resp.json()["token"]
         logger.info("Registered session with judge server")
@@ -364,8 +437,7 @@ def run_agent(
 
         if task_spec.game_mode:
             game_api_base = (
-                judge_url.rstrip("/")
-                + f"/api/v1/game/{run_id}/{task_spec.task_id}"
+                judge_url.rstrip("/") + f"/api/v1/game/{run_id}/{task_spec.task_id}"
             )
             env["GAME_SERVER_URL"] = game_api_base
 
@@ -404,7 +476,11 @@ def run_agent(
                 api_url = config.agent_api_base_url or agent.default_api_base_url
                 if api_url:
                     api_host = urlparse(api_url).hostname or ""
-                    if api_host and api_host != "host.docker.internal" and not is_ip_address(api_host):
+                    if (
+                        api_host
+                        and api_host != "host.docker.internal"
+                        and not is_ip_address(api_host)
+                    ):
                         resolved_ips = resolve_hostname(api_host, logger)
                         if resolved_ips:
                             container_extra_hosts[api_host] = resolved_ips[0]
@@ -418,8 +494,16 @@ def run_agent(
                     "relay (macOS/Docker Desktop)"
                 )
 
-        cpu = config.work_cpu_limit if config.work_cpu_limit is not None else task_spec.work.cpu_limit
-        mem = config.work_mem_limit if config.work_mem_limit is not None else task_spec.work.mem_limit
+        cpu = (
+            config.work_cpu_limit
+            if config.work_cpu_limit is not None
+            else task_spec.work.cpu_limit
+        )
+        mem = (
+            config.work_mem_limit
+            if config.work_mem_limit is not None
+            else task_spec.work.mem_limit
+        )
 
         # macOS relay isolation: stand up the internal network + relay BEFORE
         # the work container, and point the agent's API base + judge URL at the
@@ -448,7 +532,8 @@ def run_agent(
                 env[agent.api_base_env] = relay_proxy_url
             logger.info(
                 "Isolated-mode (Docker Desktop) enabled: install with internet, "
-                "then cut over to internal net; endpoints via relay %s", RELAY_IP,
+                "then cut over to internal net; endpoints via relay %s",
+                RELAY_IP,
             )
 
         handle = backend.create_container(
@@ -466,9 +551,7 @@ def run_agent(
 
         # 3. Install agent runtime
         for i, cmd in enumerate(agent.install_cmds):
-            logger.info(
-                f"Install step {i + 1}/{len(agent.install_cmds)}: {cmd}"
-            )
+            logger.info(f"Install step {i + 1}/{len(agent.install_cmds)}: {cmd}")
             result = backend.exec_run_with_exit_code(
                 handle, f"/bin/bash -c {shlex.quote(cmd)}", timeout=600
             )
@@ -508,14 +591,22 @@ def run_agent(
                 auto_eval_thread = threading.Thread(
                     target=_auto_eval_loop,
                     args=(
-                        backend, handle, task_spec, host_judge_url,
-                        session_token, effective_eval_interval,
-                        auto_eval_stop, logger, log_dir,
+                        backend,
+                        handle,
+                        task_spec,
+                        host_judge_url,
+                        session_token,
+                        effective_eval_interval,
+                        auto_eval_stop,
+                        logger,
+                        log_dir,
                     ),
                     daemon=True,
                 )
                 auto_eval_thread.start()
-                logger.info(f"Host-side auto-eval started (interval={effective_eval_interval}s)")
+                logger.info(
+                    f"Host-side auto-eval started (interval={effective_eval_interval}s)"
+                )
         elif not disable_stop_hook:
             agent.install_stop_hook(backend, handle, log_dir, logger)
 
@@ -538,13 +629,14 @@ def run_agent(
 
             gateway_ip = backend.get_container_gateway_ip(handle) or ""
             if not gateway_ip and backend.backend_name == "docker":
-                raise RuntimeError(
-                    "Cannot determine gateway IP for network isolation"
-                )
+                raise RuntimeError("Cannot determine gateway IP for network isolation")
 
             effective_api_url = config.agent_api_base_url or agent.default_api_base_url
             endpoints = build_allowed_endpoints(
-                judge_url, effective_api_url, gateway_ip, logger,
+                judge_url,
+                effective_api_url,
+                gateway_ip,
+                logger,
             )
             net_isolation = backend.create_network_isolation(handle, endpoints, logger)
             net_isolation.apply()
@@ -575,12 +667,22 @@ def run_agent(
         agent_timed_out = False
         all_output_parts: list[str] = []
         agent_live_log = log_dir / "agent_output.txt"
-        MIN_RUNTIME_FOR_RESUME = 1
-        MAX_RESUMES = 100
+        # Wall-clock seconds spent paused while the whole account pool was
+        # capped. NOT charged against remaining_timeout, so a cap gap can never
+        # silently consume the active-compute budget.
+        paused_seconds = 0.0
+        # Bounded number of pool-pause cycles: at least MIN_POOL_PAUSES, and up
+        # to one per account so a pool that caps one account at a time can be
+        # traversed fully before we give up.
+        pool_pause_count = 0
+        _pool_pause_url = config.agent_api_base_url or agent.default_api_base_url
 
         started_at = time.time()
         from datetime import datetime
-        started_at_iso = datetime.fromtimestamp(started_at).strftime("%Y-%m-%dT%H:%M:%S")
+
+        started_at_iso = datetime.fromtimestamp(started_at).strftime(
+            "%Y-%m-%dT%H:%M:%S"
+        )
         (log_dir / "started_at").write_text(f"{started_at_iso}\n{started_at}\n")
 
         on_chunk_cb = None
@@ -588,8 +690,10 @@ def run_agent(
         while remaining_timeout > 0:
             is_resume = resume_count > 0
             run_cmd = agent.format_run_cmd(
-                prompt_path, model=model,
-                internet=internet, resume=is_resume,
+                prompt_path,
+                model=model,
+                internet=internet,
+                resume=is_resume,
             )
             if is_resume:
                 logger.info(
@@ -597,7 +701,9 @@ def run_agent(
                     f"{remaining_timeout:.0f}s left): {run_cmd[:200]}..."
                 )
             else:
-                logger.info(f"Running agent: {run_cmd[:200]}... (timeout={remaining_timeout:.0f}s)")
+                logger.info(
+                    f"Running agent: {run_cmd[:200]}... (timeout={remaining_timeout:.0f}s)"
+                )
 
             seg_result = backend.exec_run_with_timeout(
                 handle,
@@ -620,25 +726,79 @@ def run_agent(
 
             if not can_resume:
                 break
+
+            # Every completed segment costs active-compute budget, however
+            # short — keep the accounting consistent for all exit paths.
+            remaining_timeout -= seg_result.elapsed_seconds
+
+            # A near-instant exit is the signature of resume-thrash: the agent
+            # crashed immediately, almost always because the whole OAuth account
+            # pool is rate-limit-capped. Ask the bridge when the pool next
+            # resets and PAUSE until then, instead of relaunching straight back
+            # into the same 429. The pause is bounded (count + duration) and is
+            # not charged against the active-compute budget.
             if seg_result.elapsed_seconds < MIN_RUNTIME_FOR_RESUME:
+                reset_at, pool_size = _bridge_pool_status(_pool_pause_url, logger)
+                now = time.time()
+
+                # Fallback: if the bridge probe failed but the agent output
+                # clearly shows a cap, still choose a conservative pause rather
+                # than a hard failure (a real cap outlives a bridge blip).
+                if reset_at is None:
+                    tail = seg_result.output[-4000:] if seg_result.output else ""
+                    if _text_has_cap_signal(tail):
+                        reset_at = now + BRIDGE_DOWN_PAUSE
+
+                if reset_at is not None and reset_at > now:
+                    max_pool_pauses = max(MIN_POOL_PAUSES, pool_size)
+                    if pool_pause_count >= max_pool_pauses:
+                        logger.warning(
+                            f"Pool-pause budget spent ({pool_pause_count}/"
+                            f"{max_pool_pauses}); stopping."
+                        )
+                        break
+                    wait = min(reset_at - now + 30.0, MAX_POOL_PAUSE, remaining_timeout)
+                    if wait > 0:
+                        logger.warning(
+                            f"Account pool capped; pausing {wait:.0f}s until reset "
+                            f"(pause {pool_pause_count + 1}/{max_pool_pauses}; "
+                            f"not charged to the run budget)."
+                        )
+                        _pause_start = time.time()
+                        if shutdown_event is not None:
+                            shutdown_event.wait(wait)
+                            if shutdown_event.is_set():
+                                break
+                        else:
+                            time.sleep(wait)
+                        paused_seconds += time.time() - _pause_start
+                        pool_pause_count += 1
+                        continue
+
                 logger.warning(
                     f"Agent exited after only {seg_result.elapsed_seconds:.1f}s "
-                    f"(< {MIN_RUNTIME_FOR_RESUME}s), not resuming (likely systematic failure)"
+                    f"(< {MIN_RUNTIME_FOR_RESUME}s) and the pool is not capped; "
+                    f"not resuming (likely systematic failure)."
                 )
                 break
+
             if resume_count >= MAX_RESUMES:
                 logger.warning(f"Max resume attempts ({MAX_RESUMES}) reached")
                 break
 
-            remaining_timeout -= seg_result.elapsed_seconds
             resume_count += 1
-            logger.info(f"Agent exited after {seg_result.elapsed_seconds:.1f}s, will resume")
+            # A segment that ran long enough to resume is real progress: reset
+            # the pool-pause budget so it is measured per-incident.
+            pool_pause_count = 0
+            logger.info(
+                f"Agent exited after {seg_result.elapsed_seconds:.1f}s, will resume"
+            )
 
         agent_output = "\n".join(all_output_parts)
         runtime = total_runtime
         logger.info(
             f"Agent finished: runtime={runtime:.1f}s, timed_out={agent_timed_out}, "
-            f"resumes={resume_count}"
+            f"resumes={resume_count}, pool_paused={paused_seconds:.0f}s"
         )
 
         # 7. Stop auto-eval thread before extracting final archive
@@ -652,7 +812,9 @@ def run_agent(
             (log_dir / "final_archive.tar.gz").write_bytes(final_archive)
             logger.info(f"Final archive: {len(final_archive)} bytes")
         except Exception as e:
-            logger.warning(f"Failed to extract final archive (container may have stopped): {e}")
+            logger.warning(
+                f"Failed to extract final archive (container may have stopped): {e}"
+            )
             final_archive = b""
 
         # 8. Collect results
@@ -684,9 +846,7 @@ def run_agent(
                 e for e in history.get("entries", []) if e.get("type") == "game"
             ]
             best_score_raw = history.get("best_score")
-            best_score = (
-                float(best_score_raw) if best_score_raw is not None else None
-            )
+            best_score = float(best_score_raw) if best_score_raw is not None else None
             best_pass_rate_raw = history.get("best_pass_rate", 0.0)
             best_pass_rate = float(best_pass_rate_raw) if best_pass_rate_raw else 0.0
             best_round = history.get("best_round", "")
@@ -744,7 +904,11 @@ def run_agent(
                         params={"token": session_token, "admin_secret": ADMIN_SECRET},
                         timeout=10,
                     ).json()
-                    pending = [e for e in h.get("entries", []) if e.get("status") in ("running", "queued")]
+                    pending = [
+                        e
+                        for e in h.get("entries", [])
+                        if e.get("status") in ("running", "queued")
+                    ]
                     if not pending:
                         break
                     logger.info(f"Draining {len(pending)} pending judge evals...")
@@ -752,7 +916,9 @@ def run_agent(
                     break
                 time.sleep(15)
             else:
-                logger.warning("Drain timed out after 15 min; some reports may be missing.")
+                logger.warning(
+                    "Drain timed out after 15 min; some reports may be missing."
+                )
 
             # Query Judge Server for authoritative results (with admin_secret to get full history)
             try:
@@ -766,9 +932,12 @@ def run_agent(
             except Exception:
                 logger.warning("Failed to fetch run history from judge server")
                 history = {
-                    "run_id": run_id, "best_score": None,
-                    "best_pass_rate": 0.0, "best_round": "",
-                    "agent_submissions": 0, "auto_submissions": 0,
+                    "run_id": run_id,
+                    "best_score": None,
+                    "best_pass_rate": 0.0,
+                    "best_round": "",
+                    "agent_submissions": 0,
+                    "auto_submissions": 0,
                     "entries": [],
                 }
 
@@ -778,9 +947,7 @@ def run_agent(
 
             best_pass_rate = history.get("best_pass_rate", 0.0)
             best_score_raw = history.get("best_score")
-            best_score = (
-                float(best_score_raw) if best_score_raw is not None else None
-            )
+            best_score = float(best_score_raw) if best_score_raw is not None else None
             best_round = history.get("best_round", "")
             agent_subs = history.get("agent_submissions", 0)
             auto_subs = history.get("auto_submissions", 0)
@@ -819,9 +986,13 @@ def run_agent(
         interrupted_archive = b""
         try:
             if handle is not None:
-                interrupted_archive = _extract_archive_from_container(backend, handle, task_spec)
+                interrupted_archive = _extract_archive_from_container(
+                    backend, handle, task_spec
+                )
                 (log_dir / "final_archive.tar.gz").write_bytes(interrupted_archive)
-                logger.info(f"Final archive (interrupted): {len(interrupted_archive)} bytes")
+                logger.info(
+                    f"Final archive (interrupted): {len(interrupted_archive)} bytes"
+                )
         except Exception:
             pass
 
@@ -836,9 +1007,12 @@ def run_agent(
             history = history_resp.json()
         except Exception:
             history = {
-                "run_id": run_id, "best_score": None,
-                "best_pass_rate": 0.0, "best_round": "",
-                "agent_submissions": 0, "auto_submissions": 0,
+                "run_id": run_id,
+                "best_score": None,
+                "best_pass_rate": 0.0,
+                "best_round": "",
+                "agent_submissions": 0,
+                "auto_submissions": 0,
                 "entries": [],
             }
 
@@ -925,7 +1099,9 @@ def run_agent(
                     logger.warning(f"Failed to cleanup relay: {exc}")
         if threading.current_thread() is threading.main_thread():
             prev_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
-            print("\nStopping container, please wait... (Ctrl+C disabled during cleanup)")
+            print(
+                "\nStopping container, please wait... (Ctrl+C disabled during cleanup)"
+            )
             backend.cleanup_container(handle, logger)
             signal.signal(signal.SIGINT, prev_handler)
         else:
