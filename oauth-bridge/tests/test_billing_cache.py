@@ -26,7 +26,7 @@ def _count_cache_control(body):
     return json.dumps(body).count('"cache_control"')
 
 
-def test_cache_control_survives_relocation():
+def test_cache_breakpoint_anchored_on_last_system_block():
     body = {
         "model": "claude-opus-4-8",
         "system": [
@@ -40,10 +40,12 @@ def test_cache_control_survives_relocation():
         "messages": [{"role": "user", "content": [{"type": "text", "text": "task"}]}],
     }
     out = _run_pipeline(body)
+    assert "cache_control" in out["system"][-1]
+    assert out["system"][-1]["cache_control"] == {"type": "ephemeral"}
     assert _count_cache_control(out) == 1
 
 
-def test_relocated_cache_control_lands_in_user_message():
+def test_relocated_blocks_carry_no_cache_control():
     body = {
         "model": "claude-opus-4-8",
         "system": [
@@ -59,13 +61,10 @@ def test_relocated_cache_control_lands_in_user_message():
     out = _run_pipeline(body)
     first_user = next(m for m in out["messages"] if m.get("role") == "user")
     blocks = first_user["content"]
-    assert any(
-        isinstance(b, dict) and b.get("cache_control") == {"type": "ephemeral"}
-        for b in blocks
-    )
+    assert not any(isinstance(b, dict) and "cache_control" in b for b in blocks)
 
 
-def test_string_user_content_becomes_blocks_with_cache_control():
+def test_string_user_content_becomes_blocks_without_cache_control():
     body = {
         "model": "claude-opus-4-8",
         "system": [
@@ -81,6 +80,9 @@ def test_string_user_content_becomes_blocks_with_cache_control():
     out = _run_pipeline(body)
     first_user = next(m for m in out["messages"] if m.get("role") == "user")
     assert isinstance(first_user["content"], list)
+    assert not any(
+        isinstance(b, dict) and "cache_control" in b for b in first_user["content"]
+    )
     assert _count_cache_control(out) == 1
 
 

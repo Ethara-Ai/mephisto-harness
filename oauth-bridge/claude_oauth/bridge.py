@@ -407,26 +407,37 @@ def apply_billing_attribution(body: dict[str, Any], raw_body: bytes) -> dict[str
     if relocated_blocks:
         _prepend_blocks_to_first_user_message(body, relocated_blocks)
 
+    # Cache breakpoint belongs on the LAST system block so the stable
+    # tools+system prefix caches. Billing forces the bulk block out of
+    # system[], so the CLI's original breakpoint left with it; re-anchor a
+    # breakpoint on the identity block here or every turn is a full cache miss.
+    identity_block = identity[0]
+    if isinstance(identity_block, dict):
+        identity_block = {**identity_block, "cache_control": {"type": "ephemeral"}}
+    else:
+        identity_block = {
+            "type": "text",
+            "text": _system_block_text(identity_block),
+            "cache_control": {"type": "ephemeral"},
+        }
     body["system"] = [
         {"type": "text", "text": _billing_header_text(raw_body)},
-        *identity,
+        identity_block,
     ]
     return body
 
 
 def _relocated_content_blocks(blocks: list[Any]) -> list[dict[str, Any]]:
-    # Preserve each block's cache_control when moving it out of system[] into the
-    # user message. Flattening to a plain string here would drop the CLI's cache
-    # breakpoint and disable prompt caching (cache_creation and cache_read both 0).
+    # Drop cache_control when relocating blocks into messages[]: a breakpoint in
+    # the message region churns every turn (growing history, per-turn thinking
+    # signatures, 20-block lookback) and never reads back. The stable breakpoint
+    # is re-anchored on the system identity block instead.
     out: list[dict[str, Any]] = []
     for blk in blocks:
         text = _system_block_text(blk)
         if not text:
             continue
-        new_blk: dict[str, Any] = {"type": "text", "text": text}
-        if isinstance(blk, dict) and "cache_control" in blk:
-            new_blk["cache_control"] = blk["cache_control"]
-        out.append(new_blk)
+        out.append({"type": "text", "text": text})
     return out
 
 
