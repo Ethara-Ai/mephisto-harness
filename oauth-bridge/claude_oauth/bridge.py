@@ -32,6 +32,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 import time
 from typing import TYPE_CHECKING, Any, Iterable, Optional, Tuple, Union
 
@@ -56,6 +57,8 @@ _LOG = logging.getLogger(__name__)
 UPSTREAM_DEFAULT = "https://api.anthropic.com"
 DEFAULT_ANTHROPIC_VERSION = "2023-06-01"
 OAUTH_BETA = "oauth-2025-04-20"
+EXTENDED_CACHE_TTL_BETA = "extended-cache-ttl-2025-04-11"
+CACHE_CONTROL_1H = {"type": "ephemeral", "ttl": "1h"}
 SYSTEM_PREFIX = "You are Claude Code, Anthropic's official CLI for Claude."
 
 # Load-bearing (the "extra usage" 400 fix): Anthropic content-inspects the
@@ -201,6 +204,36 @@ def _billing_header_text(_raw_body: bytes) -> str:
         f"{BILLING_HEADER_PREFIX} cc_version={CLAUDE_CLI_VERSION}.{_BILLING_FP}; "
         f"cc_entrypoint=cli; cch=00000;"
     )
+
+
+_CCH_RE = re.compile(r"(cch=)[0-9a-fA-F]+")
+
+
+def stabilize_billing_cch(body: dict[str, Any]) -> dict[str, Any]:
+    # The CLI stamps its own "x-anthropic-billing-header" with a per-turn rotating
+    # cch fingerprint into the first user message. That block sits at the FRONT of
+    # messages[], so its churn re-hashes the whole message-region cache prefix every
+    # turn (cache_read stays pinned at tools+system, ~27.8k, and never grows).
+    # Anthropic validates the header's presence/format, not cch entropy, so pin cch
+    # to a constant to make the prefix byte-stable and let message caching engage.
+    messages = body.get("messages")
+    if not isinstance(messages, list):
+        return body
+    for m in messages:
+        if not isinstance(m, dict):
+            continue
+        content = m.get("content")
+        if not isinstance(content, list):
+            continue
+        for blk in content:
+            if (
+                isinstance(blk, dict)
+                and blk.get("type") == "text"
+                and isinstance(blk.get("text"), str)
+                and blk["text"].startswith(BILLING_HEADER_PREFIX)
+            ):
+                blk["text"] = _CCH_RE.sub(r"\g<1>00000", blk["text"])
+    return body
 
 
 # Load-bearing: Anthropic's OAuth validator rejects a request whose tools[]
@@ -413,12 +446,12 @@ def apply_billing_attribution(body: dict[str, Any], raw_body: bytes) -> dict[str
     # breakpoint on the identity block here or every turn is a full cache miss.
     identity_block = identity[0]
     if isinstance(identity_block, dict):
-        identity_block = {**identity_block, "cache_control": {"type": "ephemeral"}}
+        identity_block = {**identity_block, "cache_control": dict(CACHE_CONTROL_1H)}
     else:
         identity_block = {
             "type": "text",
             "text": _system_block_text(identity_block),
-            "cache_control": {"type": "ephemeral"},
+            "cache_control": dict(CACHE_CONTROL_1H),
         }
     body["system"] = [
         {"type": "text", "text": _billing_header_text(raw_body)},
@@ -428,16 +461,19 @@ def apply_billing_attribution(body: dict[str, Any], raw_body: bytes) -> dict[str
 
 
 def _relocated_content_blocks(blocks: list[Any]) -> list[dict[str, Any]]:
-    # Drop cache_control when relocating blocks into messages[]: a breakpoint in
-    # the message region churns every turn (growing history, per-turn thinking
-    # signatures, 20-block lookback) and never reads back. The stable breakpoint
-    # is re-anchored on the system identity block instead.
+    # Re-anchor a cache breakpoint on the LAST relocated block so tools+system+
+    # bulk-prompt cache as one stable prefix. The message region is now byte-stable
+    # (stabilize_billing_cch pins the CLI's rotating billing cch), so a breakpoint
+    # here reads back instead of churning; the CLI's own tail breakpoint extends the
+    # cache across the growing conversation, so no extra bridge breakpoint is needed.
     out: list[dict[str, Any]] = []
     for blk in blocks:
         text = _system_block_text(blk)
         if not text:
             continue
         out.append({"type": "text", "text": text})
+    if out:
+        out[-1]["cache_control"] = dict(CACHE_CONTROL_1H)
     return out
 
 
@@ -590,6 +626,8 @@ def _build_forward_headers(request_headers: Any, access_token: str) -> dict[str,
     betas = [b.strip() for b in incoming_beta.split(",") if b.strip()]
     if OAUTH_BETA not in betas:
         betas.insert(0, OAUTH_BETA)
+    if EXTENDED_CACHE_TTL_BETA not in betas:
+        betas.append(EXTENDED_CACHE_TTL_BETA)
     fwd["anthropic-beta"] = ",".join(betas)
 
     if not any(k.lower() == "anthropic-version" for k in fwd):
@@ -1363,6 +1401,7 @@ def build_app(provider: ProviderLike | None = None) -> FastAPI:
                     body_json = normalize_body_for_anthropic_direct(body_json)
                     if _billing_attribution_enabled():
                         body_json = apply_billing_attribution(body_json, raw_body)
+                    body_json = stabilize_billing_cch(body_json)
                     if _tool_rename_enabled():
                         body_json = rename_tools_outbound(body_json)
                     raw_body = json.dumps(body_json).encode("utf-8")
