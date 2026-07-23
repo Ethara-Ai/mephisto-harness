@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import platform as platform_mod
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -53,6 +54,25 @@ class JudgeSpec:
     mem_limit: str | None = None
 
 
+_MACHINE_TO_DOCKER_PLATFORM = {
+    "x86_64": "linux/amd64",
+    "AMD64": "linux/amd64",
+    "arm64": "linux/arm64",
+    "aarch64": "linux/arm64",
+}
+
+
+def _resolve_platform(raw: str) -> str:
+    if "," not in raw:
+        return raw
+    host_plat = _MACHINE_TO_DOCKER_PLATFORM.get(platform_mod.machine(), "")
+    candidates = [p.strip() for p in raw.split(",")]
+    for candidate in candidates:
+        if candidate == host_plat:
+            return candidate
+    return candidates[0]
+
+
 def _compute_base_image_hash(base_image_key: str, base_image_spec: dict) -> str:
     data = json.dumps({"key": base_image_key, "spec": base_image_spec}, sort_keys=True)
     return hashlib.sha256(data.encode()).hexdigest()
@@ -78,7 +98,9 @@ class TaskSpec:
     @property
     def base_image_tag(self) -> str:
         """Full Docker image name with hash tag, e.g. 'edgebench.base.python310:a1b2c3d4e5f6'."""
-        return f"{self.benchmark_name}.base.{self.base_image}:{self.base_image_hash[:12]}"
+        return (
+            f"{self.benchmark_name}.base.{self.base_image}:{self.base_image_hash[:12]}"
+        )
 
     @property
     def work_image_key(self) -> str:
@@ -87,7 +109,9 @@ class TaskSpec:
 
     @property
     def judge_image_key(self) -> str:
-        tag = self.judge.image_tag if self.judge.image_tag else self.judge_image_hash[:12]
+        tag = (
+            self.judge.image_tag if self.judge.image_tag else self.judge_image_hash[:12]
+        )
         return f"{self.benchmark_name}.judge.{self.task_id}:{tag}"
 
     @property
@@ -100,12 +124,15 @@ class TaskSpec:
             raise ValueError(
                 f"Task '{self.task_id}': cannot compute work image hash without setup_cmds"
             )
-        data = json.dumps({
-            "base_hash": self.base_image_hash,
-            "platform": self.platform,
-            "cwd": self.cwd,
-            "setup_cmds": self.work.setup_cmds,
-        }, sort_keys=True)
+        data = json.dumps(
+            {
+                "base_hash": self.base_image_hash,
+                "platform": self.platform,
+                "cwd": self.cwd,
+                "setup_cmds": self.work.setup_cmds,
+            },
+            sort_keys=True,
+        )
         return hashlib.sha256(data.encode()).hexdigest()
 
     @property
@@ -114,12 +141,15 @@ class TaskSpec:
             raise ValueError(
                 f"Task '{self.task_id}': cannot compute judge image hash without setup_cmds"
             )
-        data = json.dumps({
-            "base_hash": self.base_image_hash,
-            "platform": self.platform,
-            "cwd": self.cwd,
-            "setup_cmds": self.judge.setup_cmds,
-        }, sort_keys=True)
+        data = json.dumps(
+            {
+                "base_hash": self.base_image_hash,
+                "platform": self.platform,
+                "cwd": self.cwd,
+                "setup_cmds": self.judge.setup_cmds,
+            },
+            sort_keys=True,
+        )
         return hashlib.sha256(data.encode()).hexdigest()
 
     @property
@@ -142,22 +172,33 @@ class TaskSpec:
         platform is deliberately excluded and the single tag points at the
         manifest list holding every arch.
         """
-        data = json.dumps({
-            "base_hash": self.base_image_hash,
-            "cwd": self.cwd,
-            "setup_cmds": setup_cmds,
-            "publish_platforms": sorted(self.effective_publish_platforms),
-        }, sort_keys=True)
+        data = json.dumps(
+            {
+                "base_hash": self.base_image_hash,
+                "cwd": self.cwd,
+                "setup_cmds": setup_cmds,
+                "publish_platforms": sorted(self.effective_publish_platforms),
+            },
+            sort_keys=True,
+        )
         return hashlib.sha256(data.encode()).hexdigest()
 
     @property
     def multiarch_work_image_key(self) -> str:
-        tag = self.work.image_tag if self.work.image_tag else self._multiarch_hash(self.work.setup_cmds or [])[:12]
+        tag = (
+            self.work.image_tag
+            if self.work.image_tag
+            else self._multiarch_hash(self.work.setup_cmds or [])[:12]
+        )
         return f"{self.benchmark_name}.work.{self.task_id}:{tag}"
 
     @property
     def multiarch_judge_image_key(self) -> str:
-        tag = self.judge.image_tag if self.judge.image_tag else self._multiarch_hash(self.judge.setup_cmds or [])[:12]
+        tag = (
+            self.judge.image_tag
+            if self.judge.image_tag
+            else self._multiarch_hash(self.judge.setup_cmds or [])[:12]
+        )
         return f"{self.benchmark_name}.judge.{self.task_id}:{tag}"
 
     def multiarch_work_remote_ref(self, registry: str) -> str:
@@ -281,7 +322,7 @@ def make_task_spec(task_path: Path, benchmark: BenchmarkMeta) -> TaskSpec:
         task_id=data["task_id"],
         name=data["name"],
         base_image=base_image_key,
-        platform=data["platform"],
+        platform=_resolve_platform(data["platform"]),
         cwd=data["cwd"],
         submit_paths=data["submit_paths"],
         submit_exclude=[e.rstrip("/") for e in data.get("submit_exclude", ["tests/"])],
@@ -295,13 +336,17 @@ def make_task_spec(task_path: Path, benchmark: BenchmarkMeta) -> TaskSpec:
     )
 
     _validate_image_tag_consistency(
-        data["task_id"], "work",
-        work.setup_cmds, work.image_tag,
+        data["task_id"],
+        "work",
+        work.setup_cmds,
+        work.image_tag,
         lambda: task_spec.work_image_hash,
     )
     _validate_image_tag_consistency(
-        data["task_id"], "judge",
-        judge.setup_cmds, judge.image_tag,
+        data["task_id"],
+        "judge",
+        judge.setup_cmds,
+        judge.image_tag,
         lambda: task_spec.judge_image_hash,
     )
 
