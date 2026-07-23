@@ -97,6 +97,7 @@ def start_relay(
         command=["-c", script],
         extra_hosts={"host.docker.internal": "host-gateway"},
         network=ISOLATED_NET,
+        init=True,  # tini reaps forked socat children spawned by the background listeners
     )
     client.networks.get(ISOLATED_NET).disconnect(container)
     client.networks.get(ISOLATED_NET).connect(container, ipv4_address=RELAY_IP)

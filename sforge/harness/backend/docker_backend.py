@@ -61,7 +61,9 @@ class DockerContainerHandle(ContainerHandle):
     def ip_address(self) -> str | None:
         try:
             self._container.reload()
-            networks = self._container.attrs.get("NetworkSettings", {}).get("Networks", {})
+            networks = self._container.attrs.get("NetworkSettings", {}).get(
+                "Networks", {}
+            )
             for net_info in networks.values():
                 ip = net_info.get("IPAddress", "")
                 if ip:
@@ -139,6 +141,7 @@ class DockerBackend(ContainerBackend):
             detach=True,
             command=command,
             environment=environment or {},
+            init=True,  # run tini as PID 1 to reap zombie children of background processes
             **kwargs,
         )
         return DockerContainerHandle(container)
@@ -147,7 +150,9 @@ class DockerBackend(ContainerBackend):
         self._raw(handle).start()
 
     def cleanup_container(
-        self, handle: ContainerHandle | None, logger: logging.Logger | None = None,
+        self,
+        handle: ContainerHandle | None,
+        logger: logging.Logger | None = None,
     ) -> None:
         if handle is None:
             return
@@ -218,7 +223,10 @@ class DockerBackend(ContainerBackend):
     # --- File transfer ---
 
     def copy_to_container(
-        self, handle: ContainerHandle, src: Path, dst: PurePosixPath,
+        self,
+        handle: ContainerHandle,
+        src: Path,
+        dst: PurePosixPath,
     ) -> None:
         container = self._raw(handle)
         if str(dst.parent) == ".":
@@ -233,14 +241,19 @@ class DockerBackend(ContainerBackend):
         container.put_archive(str(dst.parent), buf.read())
 
     def copy_from_container(
-        self, handle: ContainerHandle, src: PurePosixPath,
+        self,
+        handle: ContainerHandle,
+        src: PurePosixPath,
     ) -> bytes:
         container = self._raw(handle)
         bits, _ = container.get_archive(str(src))
         return b"".join(bits)
 
     def write_to_container(
-        self, handle: ContainerHandle, data: str, dst: PurePosixPath,
+        self,
+        handle: ContainerHandle,
+        data: str,
+        dst: PurePosixPath,
     ) -> None:
         container = self._raw(handle)
         command = f"cat <<'{HEREDOC_DELIMITER}' > {dst}\n{data}\n{HEREDOC_DELIMITER}"
@@ -269,7 +282,11 @@ class DockerBackend(ContainerBackend):
         result = container.exec_run(cmd, detach=detach, **kwargs)
         if detach:
             return ExecResult(output="", exit_code=0)
-        output = result.output.decode(errors="replace") if isinstance(result.output, bytes) else (result.output or "")
+        output = (
+            result.output.decode(errors="replace")
+            if isinstance(result.output, bytes)
+            else (result.output or "")
+        )
         return ExecResult(output=output, exit_code=result.exit_code)
 
     def exec_run_with_timeout(
@@ -288,15 +305,23 @@ class DockerBackend(ContainerBackend):
         on_chunk: Callable[[bytes], None] | None = None,
     ) -> StreamingExecResult:
         result = self._exec_run_impl(
-            handle, cmd, timeout,
-            log_file=log_file, user=user, workdir=workdir,
-            environment=environment, stream_to_stdout=stream_to_stdout,
-            shutdown_event=shutdown_event, log_append=log_append,
+            handle,
+            cmd,
+            timeout,
+            log_file=log_file,
+            user=user,
+            workdir=workdir,
+            environment=environment,
+            stream_to_stdout=stream_to_stdout,
+            shutdown_event=shutdown_event,
+            log_append=log_append,
             on_chunk=on_chunk,
         )
         return StreamingExecResult(
-            output=result[0], exit_code=result[1],
-            timed_out=result[2], elapsed_seconds=result[3],
+            output=result[0],
+            exit_code=result[1],
+            timed_out=result[2],
+            elapsed_seconds=result[3],
         )
 
     def exec_run_with_exit_code(
@@ -310,12 +335,18 @@ class DockerBackend(ContainerBackend):
         environment: dict[str, str] | None = None,
     ) -> StreamingExecResult:
         result = self._exec_run_impl(
-            handle, cmd, timeout,
-            user=user, workdir=workdir, environment=environment,
+            handle,
+            cmd,
+            timeout,
+            user=user,
+            workdir=workdir,
+            environment=environment,
         )
         return StreamingExecResult(
-            output=result[0], exit_code=result[1],
-            timed_out=result[2], elapsed_seconds=result[3],
+            output=result[0],
+            exit_code=result[1],
+            timed_out=result[2],
+            elapsed_seconds=result[3],
         )
 
     def _exec_run_impl(
@@ -355,7 +386,9 @@ class DockerBackend(ContainerBackend):
                         kwargs["workdir"] = workdir
                     if environment:
                         kwargs["environment"] = environment
-                    exec_id = container.client.api.exec_create(container.id, cmd, **kwargs)["Id"]
+                    exec_id = container.client.api.exec_create(
+                        container.id, cmd, **kwargs
+                    )["Id"]
                     exec_stream = container.client.api.exec_start(exec_id, stream=True)
                     for chunk in exec_stream:
                         chunks.append(chunk)
@@ -395,11 +428,17 @@ class DockerBackend(ContainerBackend):
         if thread.is_alive():
             if exec_id is not None:
                 exec_pid = container.client.api.exec_inspect(exec_id)["Pid"]
-                container.exec_run(["/bin/sh", "-c", f"kill -TERM {exec_pid}"], detach=True)
+                container.exec_run(
+                    ["/bin/sh", "-c", f"kill -TERM {exec_pid}"], detach=True
+                )
             timed_out = True
             exit_code = -1
         else:
-            exit_code = container.client.api.exec_inspect(exec_id)["ExitCode"] if exec_id else -1
+            exit_code = (
+                container.client.api.exec_inspect(exec_id)["ExitCode"]
+                if exec_id
+                else -1
+            )
 
         end_time = time.time()
         output = b"".join(chunks).decode(errors="replace")
@@ -438,7 +477,9 @@ class DockerBackend(ContainerBackend):
         from sforge.harness.network_isolation import NetworkIsolation
 
         container = self._raw(handle)
-        return DockerNetworkIsolation(NetworkIsolation(container, allowed_endpoints, logger))
+        return DockerNetworkIsolation(
+            NetworkIsolation(container, allowed_endpoints, logger)
+        )
 
     # --- Helpers ---
 
