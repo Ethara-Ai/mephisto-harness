@@ -19,6 +19,16 @@
 #   BRIDGE_PORT           default 8765
 #   WCB_CC_ACCOUNT_POOL   optional: colon-separated OAuth cred JSON files for
 #                         multi-account failover across a 5-hour cap
+#   EXTRA_RUN_ARGS        optional: extra args appended verbatim to `sforge run`.
+#                         Used by scripts/probe_difficulty.sh to pass
+#                         `--max-submissions 1` for the one-pass author-side
+#                         probe (requirements/MEPHISTO.md §3.1). Word-split on
+#                         purpose, so quote per-arg values simply.
+#   NET_MODE              optional: `--enable-internet` (default, matches the
+#                         reference runbook) or `--disable-internet`. A probe
+#                         should prefer disable so the agent cannot fetch a
+#                         published solution; note that needs sudo iptables and
+#                         that the judge + this bridge stay reachable either way.
 # ---------------------------------------------------------------------------
 set -euo pipefail
 
@@ -81,9 +91,12 @@ export SFORGE_AGENT_API_BASE_URL="http://host.docker.internal:$BRIDGE_PORT"
 export SFORGE_AGENT_API_KEY="$BRIDGE_SECRET"     # -> ANTHROPIC_AUTH_TOKEN in container; bridge validates it
 unset CLAUDE_CODE_OAUTH_TOKEN SFORGE_AGENT_EXTRA_ENV 2>/dev/null || true
 
-echo "[run] task=$TASK run_id=$RUN_ID timeout=${TIMEOUT}s model=$MODEL (via bridge, subscription auth)"
+NET_MODE="${NET_MODE:---enable-internet}"
+echo "[run] task=$TASK run_id=$RUN_ID timeout=${TIMEOUT}s model=$MODEL net=$NET_MODE (via bridge, subscription auth)"
+[ -n "${EXTRA_RUN_ARGS:-}" ] && echo "[run] extra args: $EXTRA_RUN_ARGS"
+# shellcheck disable=SC2086  # EXTRA_RUN_ARGS is intentionally word-split
 "$PY" -m sforge run --task "$TASK" \
   --agent claude-code --model "$MODEL" \
-  --timeout "$TIMEOUT" --enable-internet \
+  --timeout "$TIMEOUT" "$NET_MODE" \
   --work-cpu-limit 4 --work-mem-limit 8g \
-  --run-id "$RUN_ID"
+  --run-id "$RUN_ID" ${EXTRA_RUN_ARGS:-}
