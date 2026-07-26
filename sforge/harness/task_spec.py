@@ -354,8 +354,44 @@ def make_task_spec(task_path: Path, benchmark: BenchmarkMeta) -> TaskSpec:
 
 
 def load_all_tasks(tasks_dir: Path, benchmark: BenchmarkMeta) -> list[TaskSpec]:
-    """Load all task specs from a directory of JSON files."""
-    tasks = []
+    """Load all task specs from a directory.
+
+    Discovers both native SForge JSON tasks (``<tasks_dir>/*.json``) and Harbor
+    bundles (``<tasks_dir>/<task_id>/task.toml``). A directory may hold either or
+    both; when a task_id is present in both forms the JSON wins (native format is
+    authoritative), so a JSON drop-in can shadow a bundle without a name clash.
+    """
+    from sforge.harness.harbor_loader import load_harbor_task
+
+    tasks: list[TaskSpec] = []
+    seen: set[str] = set()
     for task_path in sorted(tasks_dir.glob("*.json")):
-        tasks.append(make_task_spec(task_path, benchmark))
+        spec = make_task_spec(task_path, benchmark)
+        seen.add(spec.task_id)
+        tasks.append(spec)
+    for toml_path in sorted(tasks_dir.glob("*/task.toml")):
+        spec = load_harbor_task(toml_path.parent, benchmark)
+        if spec.task_id in seen:
+            continue
+        seen.add(spec.task_id)
+        tasks.append(spec)
     return tasks
+
+
+def resolve_task_spec(
+    tasks_dir: Path, task_id: str, benchmark: BenchmarkMeta
+) -> TaskSpec | None:
+    """Resolve a single task by id, honoring both JSON and Harbor bundle forms.
+
+    Prefers ``<tasks_dir>/<task_id>.json``; falls back to the Harbor bundle at
+    ``<tasks_dir>/<task_id>/task.toml``. Returns ``None`` if neither exists.
+    """
+    json_path = tasks_dir / f"{task_id}.json"
+    if json_path.exists():
+        return make_task_spec(json_path, benchmark)
+    toml_path = tasks_dir / task_id / "task.toml"
+    if toml_path.exists():
+        from sforge.harness.harbor_loader import load_harbor_task
+
+        return load_harbor_task(toml_path.parent, benchmark)
+    return None

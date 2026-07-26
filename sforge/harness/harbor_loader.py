@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import shlex
 from pathlib import Path
 from typing import Any
 
@@ -12,7 +13,12 @@ except ModuleNotFoundError:
 
 from sforge.harness.benchmark import BenchmarkMeta
 from sforge.harness.score_rescale import parse_rescale_spec
-from sforge.harness.task_spec import JudgeSpec, TaskSpec, WorkSpec
+from sforge.harness.task_spec import (
+    JudgeSpec,
+    TaskSpec,
+    WorkSpec,
+    _resolve_platform,
+)
 
 
 _NETWORK_MODE_TO_INTERNET = {
@@ -32,20 +38,27 @@ def _parse_memory_mb(mb: Any) -> str | None:
         return None
     try:
         return f"{int(mb)}m"
-    except (TypeError, ValueError):
-        return None
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"invalid memory_mb value {mb!r}: expected an integer number of MB"
+        ) from exc
 
 
 def _build_eval_cmd(test_sh_source: str, cwd: str) -> str:
     # Must satisfy BOTH contracts: Harbor's reward.txt AND SForge's structured_json (JSON on stdout).
+    # base64 here is TRANSPORT ENCODING ONLY, not a security boundary: the decoded
+    # script runs verbatim in-container, so containment relies solely on Docker
+    # isolation. cwd comes from task.toml and is shell-quoted to block injection.
+    # SCORE is filtered to digits/./- so a hostile reward.txt cannot break the JSON.
     encoded = base64.b64encode(test_sh_source.encode()).decode()
+    safe_cwd = shlex.quote(cwd)
     return (
-        f"cd {cwd} && "
+        f"cd {safe_cwd} && "
         f"mkdir -p /logs/verifier && "
         f"echo {encoded} | base64 -d > /tmp/harbor_test.sh && "
         f"chmod +x /tmp/harbor_test.sh && "
         f"bash /tmp/harbor_test.sh; "
-        f"SCORE=$(cat /logs/verifier/reward.txt 2>/dev/null | tr -d '[:space:]' || echo 0); "
+        f"SCORE=$(cat /logs/verifier/reward.txt 2>/dev/null | tr -dc '0-9.-' || echo 0); "
         f'echo "{{\\"score\\": ${{SCORE:-0}}}}"'
     )
 
@@ -101,10 +114,11 @@ def load_harbor_task(task_dir: Path, benchmark: BenchmarkMeta) -> TaskSpec:
     test_sh_source = tests_path.read_text()
 
     cwd = env_block.get("workdir") or ext.get("cwd") or "/workspace"
-    platform = ext.get("platform", "linux/amd64")
-    internet = _NETWORK_MODE_TO_INTERNET.get(
-        env_block.get("network_mode", "public"), True
-    )
+    platform = _resolve_platform(ext.get("platform", "linux/amd64"))
+    # Fail CLOSED: a missing or unrecognized network_mode grants NO internet, so a
+    # forgotten/misspelled value can never silently disable isolation.
+    network_mode = env_block.get("network_mode", "no-network")
+    internet = _NETWORK_MODE_TO_INTERNET.get(network_mode, False)
 
     work_image_tag = ext.get("work_image_tag")
     if not work_image_tag:
@@ -136,7 +150,12 @@ def load_harbor_task(task_dir: Path, benchmark: BenchmarkMeta) -> TaskSpec:
         mem_limit=_parse_memory_mb(env_block.get("memory_mb")),
     )
 
-    judge_env_for_limits = verifier_env or env_block
+    # Resolve each limit independently: use the verifier's own value when that key
+    # is present, else fall back to the work env. Using `verifier_env or env_block`
+    # would discard ALL work-env limits whenever the verifier block set ANY key.
+    def _judge_limit(key: str) -> Any:
+        return verifier_env[key] if key in verifier_env else env_block.get(key)
+
     judge = JudgeSpec(
         eval_cmd=_build_eval_cmd(test_sh_source, cwd),
         eval_timeout=int(verifier_block.get("timeout_sec", 600)),
@@ -147,8 +166,8 @@ def load_harbor_task(task_dir: Path, benchmark: BenchmarkMeta) -> TaskSpec:
         score_direction=ext.get("score_direction", "maximize"),
         selection=ext.get("selection", "pass_rate_first"),
         rescale=parse_rescale_spec(ext.get("rescale")),
-        cpu_limit=judge_env_for_limits.get("cpus"),
-        mem_limit=_parse_memory_mb(judge_env_for_limits.get("memory_mb")),
+        cpu_limit=_judge_limit("cpus"),
+        mem_limit=_parse_memory_mb(_judge_limit("memory_mb")),
     )
 
     submit_paths = ext.get("submit_paths")
@@ -157,9 +176,7 @@ def load_harbor_task(task_dir: Path, benchmark: BenchmarkMeta) -> TaskSpec:
             f"Harbor task '{task_id}': [extensions.sforge].submit_paths is required "
             f"(SForge needs to know what the agent submits)."
         )
-    submit_exclude = [
-        e.rstrip("/") for e in ext.get("submit_exclude", ["tests/"])
-    ]
+    submit_exclude = [e.rstrip("/") for e in ext.get("submit_exclude", ["tests/"])]
 
     task_spec = TaskSpec(
         task_id=task_id,

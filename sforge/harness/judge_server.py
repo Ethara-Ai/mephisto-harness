@@ -32,7 +32,12 @@ from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
 from pydantic import BaseModel
 
 from sforge.harness.backend import ContainerBackend
-from sforge.harness.config import SForgeConfig, create_backend_from_config, get_container_env, load_config
+from sforge.harness.config import (
+    SForgeConfig,
+    create_backend_from_config,
+    get_container_env,
+    load_config,
+)
 from sforge.harness.constants import ADMIN_SECRET
 from sforge.harness.docker_build import BuildImageError, build_judge_image
 from sforge.harness.run_evaluation import judge_submission
@@ -180,8 +185,12 @@ class JudgeState:
         self.submissions: dict[str, dict] = {}  # submission_id -> {status, report, ...}
         self.game_sessions: dict[str, GameSessionState] = {}
         self.run_history: dict[str, list[dict]] = {}  # run_id -> [entries]
-        self.tokens: dict[str, dict] = {}  # token -> {task_id, run_id, next_agent, next_auto, judge_cpu_limit, judge_mem_limit}
-        self.run_resource_limits: dict[str, dict] = {}  # run_id -> {judge_cpu_limit, judge_mem_limit}
+        self.tokens: dict[
+            str, dict
+        ] = {}  # token -> {task_id, run_id, next_agent, next_auto, judge_cpu_limit, judge_mem_limit}
+        self.run_resource_limits: dict[
+            str, dict
+        ] = {}  # run_id -> {judge_cpu_limit, judge_mem_limit}
         self.run_backends: dict[str, ContainerBackend] = {}  # run_id -> backend
         self._game_lock = threading.Lock()
         self._history_lock = threading.Lock()
@@ -189,9 +198,7 @@ class JudgeState:
         self.backend = create_backend_from_config(config)
 
         self._reaper_stop = threading.Event()
-        self._reaper_thread = threading.Thread(
-            target=self._reaper_loop, daemon=True
-        )
+        self._reaper_thread = threading.Thread(target=self._reaper_loop, daemon=True)
         self._reaper_thread.start()
 
     def _reaper_loop(self) -> None:
@@ -219,12 +226,18 @@ class JudgeState:
             backend = self._get_backend(sess.run_id)
             backend.cleanup_container(sess.container, logger)
         except Exception:
-            logger.exception("Error cleaning up game container for session %s", session_id)
+            logger.exception(
+                "Error cleaning up game container for session %s", session_id
+            )
 
     def _game_log_dir(self, sess: GameSessionState) -> Path:
         return (
-            self.config.log_dir / "runs" / sess.run_id
-            / sess.task_id / "submissions" / f"game-{sess.game_num}"
+            self.config.log_dir
+            / "runs"
+            / sess.run_id
+            / sess.task_id
+            / "submissions"
+            / f"game-{sess.game_num}"
         )
 
     def _archive_game_session(self, sess: GameSessionState) -> None:
@@ -250,7 +263,9 @@ class JudgeState:
 
         log_dir = self._game_log_dir(sess)
         log_dir.mkdir(parents=True, exist_ok=True)
-        (log_dir / "game_result.json").write_text(json.dumps(entry, indent=2, ensure_ascii=False))
+        (log_dir / "game_result.json").write_text(
+            json.dumps(entry, indent=2, ensure_ascii=False)
+        )
 
     def _flush_game_step(self, sess: GameSessionState) -> None:
         log_dir = self._game_log_dir(sess)
@@ -261,16 +276,20 @@ class JudgeState:
 
     # --- Token-based session registration ---
 
-    def register_session(self, task_id: str, run_id: str,
-                         judge_cpu_limit: int | None = None,
-                         judge_mem_limit: str | None = None,
-                         backend: str | None = None,
-                         k8s_image_registry: str | None = None,
-                         k8s_namespace: str | None = None,
-                         k8s_node_selector: dict[str, str] | None = None,
-                         k8s_kubeconfig: str | None = None,
-                         max_agent_submissions: int | None = None,
-                         submission_cooldown: int | None = None) -> str:
+    def register_session(
+        self,
+        task_id: str,
+        run_id: str,
+        judge_cpu_limit: int | None = None,
+        judge_mem_limit: str | None = None,
+        backend: str | None = None,
+        k8s_image_registry: str | None = None,
+        k8s_namespace: str | None = None,
+        k8s_node_selector: dict[str, str] | None = None,
+        k8s_kubeconfig: str | None = None,
+        max_agent_submissions: int | None = None,
+        submission_cooldown: int | None = None,
+    ) -> str:
         if task_id not in self.tasks:
             raise ValueError(f"Unknown task: {task_id}")
         token = secrets.token_hex(16)
@@ -292,11 +311,14 @@ class JudgeState:
             }
             if backend and backend != self.backend.backend_name:
                 from sforge.harness.backend.factory import create_backend
+
                 self.run_backends[run_id] = create_backend(
                     backend,
                     k8s_namespace=k8s_namespace or self.config.k8s_namespace,
-                    k8s_node_selector=k8s_node_selector or self.config.k8s_node_selector,
-                    k8s_image_registry=k8s_image_registry or self.config.k8s_image_registry,
+                    k8s_node_selector=k8s_node_selector
+                    or self.config.k8s_node_selector,
+                    k8s_image_registry=k8s_image_registry
+                    or self.config.k8s_image_registry,
                     k8s_kubeconfig=k8s_kubeconfig or self.config.k8s_kubeconfig,
                 )
         return token
@@ -305,6 +327,7 @@ class JudgeState:
         if run_id and run_id in self.run_backends:
             return self.run_backends[run_id]
         return self.backend
+
     def resolve_token(self, token: str) -> dict:
         with self._tokens_lock:
             info = self.tokens.get(token)
@@ -312,7 +335,9 @@ class JudgeState:
             raise KeyError("Invalid token")
         return dict(info)
 
-    def consume_round(self, token: str, kind: str = "agent") -> tuple[str, str, str, int | None, str | None, int | None]:
+    def consume_round(
+        self, token: str, kind: str = "agent"
+    ) -> tuple[str, str, str, int | None, str | None, int | None]:
         """Allocate the next round ID for a token. Returns (task_id, run_id, round_id, cpu, mem, remaining).
 
         For agent submissions, enforces max_agent_submissions and submission_cooldown.
@@ -355,9 +380,25 @@ class JudgeState:
                 if max_subs is not None:
                     remaining = max_subs - n
 
-        return info["task_id"], info["run_id"], round_id, info.get("judge_cpu_limit"), info.get("judge_mem_limit"), remaining
+        return (
+            info["task_id"],
+            info["run_id"],
+            round_id,
+            info.get("judge_cpu_limit"),
+            info.get("judge_mem_limit"),
+            remaining,
+        )
 
-    def _record_submission(self, run_id: str, submission_id: str, task_id: str, round_id: str | None, report_dict: dict | None, error: str | None, status: str = "completed") -> None:
+    def _record_submission(
+        self,
+        run_id: str,
+        submission_id: str,
+        task_id: str,
+        round_id: str | None,
+        report_dict: dict | None,
+        error: str | None,
+        status: str = "completed",
+    ) -> None:
         entry: dict[str, Any] = {
             "type": "submission",
             "status": status,
@@ -408,8 +449,12 @@ class JudgeState:
             "best_score": best["best_score"],
             "best_pass_rate": best["best_pass_rate"],
             "best_round": best["best_round"],
-            "agent_submissions": sum(1 for e in sub_entries if (e.get("round") or "").startswith("agent-")),
-            "auto_submissions": sum(1 for e in sub_entries if (e.get("round") or "").startswith("auto-")),
+            "agent_submissions": sum(
+                1 for e in sub_entries if (e.get("round") or "").startswith("agent-")
+            ),
+            "auto_submissions": sum(
+                1 for e in sub_entries if (e.get("round") or "").startswith("auto-")
+            ),
             "entries": entries,
         }
 
@@ -418,8 +463,15 @@ class JudgeState:
         task_list = load_all_tasks(self.config.tasks_dir, benchmark)
         self.tasks = {t.task_id: t for t in task_list}
 
-    def submit(self, task_id: str, archive: bytes, run_id: str | None = None, round: str | None = None,
-               judge_cpu_limit: int | None = None, judge_mem_limit: str | None = None) -> str:
+    def submit(
+        self,
+        task_id: str,
+        archive: bytes,
+        run_id: str | None = None,
+        round: str | None = None,
+        judge_cpu_limit: int | None = None,
+        judge_mem_limit: str | None = None,
+    ) -> str:
         """Submit and grade asynchronously. Returns submission_id for polling."""
         if task_id not in self.tasks:
             raise ValueError(f"Unknown task: {task_id}")
@@ -434,28 +486,48 @@ class JudgeState:
             "report": None,
             "error": None,
         }
-        self._record_submission(log_run_id, submission_id, task_id, round, None, None, status="running")
+        self._record_submission(
+            log_run_id, submission_id, task_id, round, None, None, status="running"
+        )
 
         thread = threading.Thread(
             target=self._grade_worker,
-            args=(submission_id, task_id, archive, run_id, round,
-                  judge_cpu_limit, judge_mem_limit),
+            args=(
+                submission_id,
+                task_id,
+                archive,
+                run_id,
+                round,
+                judge_cpu_limit,
+                judge_mem_limit,
+            ),
             daemon=True,
         )
         thread.start()
         return submission_id
 
-    def _grade_worker(self, submission_id: str, task_id: str, archive: bytes,
-                      run_id: str | None = None, round: int | None = None,
-                      judge_cpu_limit: int | None = None, judge_mem_limit: str | None = None) -> None:
+    def _grade_worker(
+        self,
+        submission_id: str,
+        task_id: str,
+        archive: bytes,
+        run_id: str | None = None,
+        round: int | None = None,
+        judge_cpu_limit: int | None = None,
+        judge_mem_limit: str | None = None,
+    ) -> None:
         self.submissions[submission_id]["status"] = SubmissionStatus.RUNNING
         try:
             task_spec = self.tasks[task_id]
             log_run_id = run_id or submission_id
             sub_num = str(round) if round is not None else "1"
             sub_log_dir = (
-                self.config.log_dir / "runs" / log_run_id
-                / task_id / "submissions" / sub_num
+                self.config.log_dir
+                / "runs"
+                / log_run_id
+                / task_id
+                / "submissions"
+                / sub_num
             )
             overrides: dict = {}
             if judge_cpu_limit is not None:
@@ -475,18 +547,24 @@ class JudgeState:
             report_dict.pop("score_0_100", None)
             self.submissions[submission_id]["status"] = SubmissionStatus.COMPLETED
             self.submissions[submission_id]["report"] = report_dict
-            self._record_submission(log_run_id, submission_id, task_id, round, report_dict, None)
+            self._record_submission(
+                log_run_id, submission_id, task_id, round, report_dict, None
+            )
         except Exception as e:
             self.submissions[submission_id]["status"] = SubmissionStatus.ERROR
             self.submissions[submission_id]["error"] = str(e)
-            self._record_submission(log_run_id, submission_id, task_id, round, None, str(e))
+            self._record_submission(
+                log_run_id, submission_id, task_id, round, None, str(e)
+            )
 
     def get_result(self, submission_id: str) -> dict | None:
         return self.submissions.get(submission_id)
 
     # --- Game session management ---
 
-    def create_game_session(self, run_id: str, task_id: str) -> tuple[GameSessionState, dict]:
+    def create_game_session(
+        self, run_id: str, task_id: str
+    ) -> tuple[GameSessionState, dict]:
         """Start a game container and create a new game session.
 
         Returns (session_state, response_from_container).
@@ -501,25 +579,43 @@ class JudgeState:
 
         with self._game_lock:
             if len(self.game_sessions) >= GAME_SESSION_MAX:
-                raise RuntimeError(f"Too many active game sessions ({GAME_SESSION_MAX})")
+                raise RuntimeError(
+                    f"Too many active game sessions ({GAME_SESSION_MAX})"
+                )
 
         # Evict oldest sessions for this run+task if at per-task cap
         with self._game_lock:
             task_sessions = sorted(
-                [s for s in self.game_sessions.values() if s.run_id == run_id and s.task_id == task_id],
+                [
+                    s
+                    for s in self.game_sessions.values()
+                    if s.run_id == run_id and s.task_id == task_id
+                ],
                 key=lambda s: s.game_num,
             )
-            to_evict = task_sessions[:len(task_sessions) - GAME_SESSION_PER_RUN_MAX + 1] if len(task_sessions) >= GAME_SESSION_PER_RUN_MAX else []
+            to_evict = (
+                task_sessions[: len(task_sessions) - GAME_SESSION_PER_RUN_MAX + 1]
+                if len(task_sessions) >= GAME_SESSION_PER_RUN_MAX
+                else []
+            )
         for sess in to_evict:
-            logger.info("Evicting oldest game session %s for %s/%s", sess.session_id, run_id, task_id)
+            logger.info(
+                "Evicting oldest game session %s for %s/%s",
+                sess.session_id,
+                run_id,
+                task_id,
+            )
             self._destroy_game_session(sess.session_id)
 
         backend = self._get_backend(run_id)
 
         if backend.backend_name == "docker":
             from sforge.harness.backend.docker_backend import DockerBackend
+
             assert isinstance(backend, DockerBackend)
-            build_judge_image(task_spec, self.config, backend.client, force_rebuild=False)
+            build_judge_image(
+                task_spec, self.config, backend.client, force_rebuild=False
+            )
 
         session_id = uuid.uuid4().hex[:12]
         container_name = f"sforge.game.{task_id}.{session_id}"
@@ -545,7 +641,9 @@ class JudgeState:
         backend.start_container(handle)
         logger.info("Game container started: %s (%s)", container_name, handle.id[:12])
 
-        backend.copy_to_container(handle, GAME_SERVER_APP_PATH, PurePosixPath("/tmp/game_server_app.py"))
+        backend.copy_to_container(
+            handle, GAME_SERVER_APP_PATH, PurePosixPath("/tmp/game_server_app.py")
+        )
 
         backend.exec_run(
             handle,
@@ -583,7 +681,11 @@ class JudgeState:
 
         with self._history_lock:
             history_key = f"{run_id}/{task_id}"
-            archived = sum(1 for e in self.run_history.get(history_key, []) if e.get("type") == "game")
+            archived = sum(
+                1
+                for e in self.run_history.get(history_key, [])
+                if e.get("type") == "game"
+            )
         with self._game_lock:
             active = sum(1 for s in self.game_sessions.values() if s.run_id == run_id)
         game_num = archived + active + 1
@@ -626,15 +728,17 @@ class JudgeState:
         sess.moves = data.get("moves", sess.moves)
         sess.done = data.get("done", sess.done)
         sess.last_active = time.time()
-        sess.steps.append({
-            "move": sess.moves,
-            "action": action,
-            "observation": data.get("observation", ""),
-            "score": data.get("score", 0),
-            "peak_score": data.get("peak_score", 0),
-            "max_score": data.get("max_score", 0),
-            "done": data.get("done", False),
-        })
+        sess.steps.append(
+            {
+                "move": sess.moves,
+                "action": action,
+                "observation": data.get("observation", ""),
+                "score": data.get("score", 0),
+                "peak_score": data.get("peak_score", 0),
+                "max_score": data.get("max_score", 0),
+                "done": data.get("done", False),
+            }
+        )
 
         self._flush_game_step(sess)
 
@@ -658,7 +762,11 @@ class JudgeState:
             backend.cleanup_container(sess.container, logger)
         except Exception:
             logger.exception("Error auto-closing game session %s", session_id)
-        logger.info("Auto-closed done game session %s (max_score=%d)", session_id, sess.max_score)
+        logger.info(
+            "Auto-closed done game session %s (max_score=%d)",
+            session_id,
+            sess.max_score,
+        )
 
     def game_status(self, session_id: str) -> dict:
         with self._game_lock:
@@ -702,14 +810,17 @@ class JudgeState:
                 backend = self._get_backend(sess.run_id)
                 backend.cleanup_container(sess.container, logger)
             except Exception:
-                logger.exception("Error cleaning up game container for session %s", session_id)
+                logger.exception(
+                    "Error cleaning up game container for session %s", session_id
+                )
 
         return data
 
     def close_all_game_sessions(self, run_id: str, task_id: str) -> int:
         with self._game_lock:
             sessions = [
-                (sid, sess) for sid, sess in self.game_sessions.items()
+                (sid, sess)
+                for sid, sess in self.game_sessions.items()
                 if sess.run_id == run_id and sess.task_id == task_id
             ]
         # Phase 1: archive all sessions synchronously (fast — JSON write + dict
@@ -724,15 +835,18 @@ class JudgeState:
         # Phase 2: docker cleanup is slow (stop+rm per container). Run it in
         # a background thread so we can return to the caller immediately.
         backend = self._get_backend(run_id)
+
         def _bg_cleanup():
             for sid, container in containers_to_cleanup:
                 try:
                     backend.cleanup_container(container, logger)
                 except Exception:
-                    logger.exception("Error cleaning up game container for session %s", sid)
+                    logger.exception(
+                        "Error cleaning up game container for session %s", sid
+                    )
+
         threading.Thread(target=_bg_cleanup, daemon=True).start()
         return len(sessions)
-
 
 
 # --- FastAPI app factory ---
@@ -766,7 +880,8 @@ def create_app(config: SForgeConfig | None = None) -> FastAPI:
             raise HTTPException(status_code=403, detail="Invalid admin secret")
         try:
             token = state.register_session(
-                req.task_id, req.run_id,
+                req.task_id,
+                req.run_id,
                 judge_cpu_limit=req.judge_cpu_limit,
                 judge_mem_limit=req.judge_mem_limit,
                 backend=req.backend,
@@ -794,11 +909,17 @@ def create_app(config: SForgeConfig | None = None) -> FastAPI:
         kind=auto requires a valid admin_secret (host-side only).
         """
         if kind not in ("agent", "auto"):
-            raise HTTPException(status_code=400, detail="kind must be 'agent' or 'auto'")
+            raise HTTPException(
+                status_code=400, detail="kind must be 'agent' or 'auto'"
+            )
         if kind == "auto" and admin_secret != ADMIN_SECRET:
-            raise HTTPException(status_code=403, detail="admin_secret required for auto submissions")
+            raise HTTPException(
+                status_code=403, detail="admin_secret required for auto submissions"
+            )
         try:
-            task_id, run_id, round_id, judge_cpu_limit, judge_mem_limit, remaining = state.consume_round(token, kind)
+            task_id, run_id, round_id, judge_cpu_limit, judge_mem_limit, remaining = (
+                state.consume_round(token, kind)
+            )
         except KeyError:
             raise HTTPException(status_code=401, detail="Invalid token")
         except SubmissionBudgetExceeded as e:
@@ -807,9 +928,14 @@ def create_app(config: SForgeConfig | None = None) -> FastAPI:
             raise HTTPException(status_code=429, detail=str(e))
         archive_data = archive.file.read()
         try:
-            submission_id = state.submit(task_id, archive_data, run_id, round_id,
-                                         judge_cpu_limit=judge_cpu_limit,
-                                         judge_mem_limit=judge_mem_limit)
+            submission_id = state.submit(
+                task_id,
+                archive_data,
+                run_id,
+                round_id,
+                judge_cpu_limit=judge_cpu_limit,
+                judge_mem_limit=judge_mem_limit,
+            )
             return SubmitResponse(
                 submission_id=submission_id,
                 round_id=round_id,
@@ -835,7 +961,8 @@ def create_app(config: SForgeConfig | None = None) -> FastAPI:
             return full
         # Filter to agent-only view: hide auto-eval entries
         agent_entries = [
-            e for e in full.get("entries", [])
+            e
+            for e in full.get("entries", [])
             if not (e.get("round") or "").startswith("auto-")
         ]
         resolved_tid = info["task_id"]
@@ -848,7 +975,9 @@ def create_app(config: SForgeConfig | None = None) -> FastAPI:
             "best_score": best["best_score"],
             "best_pass_rate": best["best_pass_rate"],
             "best_round": best["best_round"],
-            "agent_submissions": sum(1 for e in agent_entries if e.get("type") == "submission"),
+            "agent_submissions": sum(
+                1 for e in agent_entries if e.get("type") == "submission"
+            ),
             "auto_submissions": 0,
             "entries": agent_entries,
         }
@@ -875,7 +1004,9 @@ def create_app(config: SForgeConfig | None = None) -> FastAPI:
         )
 
     @app.post("/api/v1/game/{run_id}/{task_id}/{session_id}/step")
-    def game_step(run_id: str, task_id: str, session_id: str, req: GameStepRequest) -> GameStepResponse:
+    def game_step(
+        run_id: str, task_id: str, session_id: str, req: GameStepRequest
+    ) -> GameStepResponse:
         try:
             data = state.game_step(session_id, req.action)
         except KeyError:
