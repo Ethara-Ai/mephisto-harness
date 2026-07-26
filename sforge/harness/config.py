@@ -80,6 +80,7 @@ class SForgeConfig:
     # Paths
     log_dir: Path = field(default_factory=lambda: LOG_DIR)
     tasks_dir: Path = field(default_factory=lambda: TASKS_DIR)
+    benchmark_dir: Path | None = None
 
 
 def load_config(cli_overrides: dict | None = None) -> SForgeConfig:
@@ -112,6 +113,7 @@ def load_config(cli_overrides: dict | None = None) -> SForgeConfig:
         "work_mem_limit": ["SFORGE_WORK_MEM_LIMIT"],
         "log_dir": ["SFORGE_LOG_DIR"],
         "tasks_dir": ["SFORGE_TASKS_DIR"],
+        "benchmark_dir": ["SFORGE_BENCHMARK_PATH"],
     }
 
     for field_name, env_keys in _env_map.items():
@@ -119,7 +121,9 @@ def load_config(cli_overrides: dict | None = None) -> SForgeConfig:
             val = os.environ.get(env_key)
             if val is not None:
                 f = next(f for f in fields(config) if f.name == field_name)
-                if f.type in ("Path", "Path | None"):
+                # `from __future__ import annotations` makes f.type a string; match
+                # any Path annotation form so a future `Optional[Path]` still converts.
+                if "Path" in str(f.type):
                     setattr(config, field_name, Path(val))
                 elif f.type in ("int", "int | None"):
                     setattr(config, field_name, int(val))

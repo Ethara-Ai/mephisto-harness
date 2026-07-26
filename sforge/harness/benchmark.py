@@ -31,13 +31,25 @@ class BenchmarkMeta:
     base_images: dict[str, dict] = field(default_factory=dict)
 
 
-def load_benchmark(tasks_dir: Path) -> BenchmarkMeta:
-    """Load benchmark metadata from tasks_dir/BENCHMARK.yaml."""
-    path = tasks_dir / BENCHMARK_FILENAME
+def load_benchmark(tasks_dir: Path, benchmark_dir: Path | None = None) -> BenchmarkMeta:
+    """Load benchmark metadata from BENCHMARK.yaml.
+
+    Reads from ``benchmark_dir`` when given, else ``tasks_dir`` (historical
+    behavior). Resolved to absolute so a relative override does not depend on
+    the process working directory.
+    """
+    from_override = benchmark_dir is not None
+    search_dir = (benchmark_dir if from_override else tasks_dir).resolve()
+    path = search_dir / BENCHMARK_FILENAME
     if not path.exists():
+        source = (
+            "benchmark dir (SFORGE_BENCHMARK_PATH/--benchmark)"
+            if from_override
+            else "tasks dir"
+        )
         raise FileNotFoundError(
             f"Benchmark metadata not found: {path}\n"
-            f"Expected a {BENCHMARK_FILENAME} file in the tasks directory."
+            f"Expected a {BENCHMARK_FILENAME} file in the {source}."
         )
     with open(path) as f:
         data = yaml.safe_load(f)

@@ -414,7 +414,7 @@ class JudgeState:
         }
 
     def load_tasks(self) -> None:
-        benchmark = load_benchmark(self.config.tasks_dir)
+        benchmark = load_benchmark(self.config.tasks_dir, self.config.benchmark_dir)
         task_list = load_all_tasks(self.config.tasks_dir, benchmark)
         self.tasks = {t.task_id: t for t in task_list}
 
